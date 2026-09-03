@@ -6,6 +6,7 @@ Produces structured recommendations, not just text.
 
 import json
 import logging
+import os
 import re
 from google import genai
 from google.genai import types

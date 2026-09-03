@@ -289,12 +289,17 @@ class SwapActionView(APIView):
 
         # Approximate conversion
         from .analytics import NGN_TO_USD_RATE
-        from decimal import Decimal
+        from decimal import Decimal, ROUND_HALF_UP
+
+        def _money(value):
+            """Keep stored amounts at 2 decimal places (no float artifacts)."""
+            return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
         if data['from_currency'] in ('USD', 'USDB'):
-            converted = data['amount'] / NGN_TO_USD_RATE
+            converted = _money(data['amount'] / NGN_TO_USD_RATE)
             to_currency_display = 'NGN'
         else:
-            converted = data['amount'] * NGN_TO_USD_RATE
+            converted = _money(data['amount'] * NGN_TO_USD_RATE)
             to_currency_display = 'USD'
 
         Transaction.objects.create(

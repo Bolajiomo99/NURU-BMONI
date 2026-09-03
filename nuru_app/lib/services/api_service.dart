@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,11 +41,16 @@ class ApiService {
   /// Update backend URL for physical device testing
   static Future<void> setBaseUrl(String newUrl) async {
     String formatted = newUrl.trim();
+    // Strip any trailing slash before normalising, so ".../api/" does not
+    // become ".../api/api".
+    if (formatted.endsWith('/')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
     if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
       formatted = 'http://$formatted';
     }
     if (!formatted.endsWith('/api')) {
-      formatted = formatted.endsWith('/') ? '${formatted}api' : '$formatted/api';
+      formatted = '$formatted/api';
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -56,15 +60,17 @@ class ApiService {
   }
 
   static Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
 
   /// Helper to execute GET with auto-fallback to alternate URLs if connection fails
   static Future<http.Response> _getWithFallback(String path) async {
     final primary = await getBaseUrl();
     try {
-      final res = await http.get(Uri.parse('$primary$path'), headers: _headers).timeout(const Duration(seconds: 4));
+      final res = await http
+          .get(Uri.parse('$primary$path'), headers: _headers)
+          .timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) return res;
     } catch (_) {}
 
@@ -72,7 +78,9 @@ class ApiService {
     for (final candidate in _candidateUrls) {
       if (candidate == primary) continue;
       try {
-        final res = await http.get(Uri.parse('$candidate$path'), headers: _headers).timeout(const Duration(seconds: 3));
+        final res = await http
+            .get(Uri.parse('$candidate$path'), headers: _headers)
+            .timeout(const Duration(seconds: 3));
         if (res.statusCode == 200) {
           await setBaseUrl(candidate);
           return res;
@@ -81,7 +89,9 @@ class ApiService {
     }
 
     // Try primary one last time to surface exact error
-    return await http.get(Uri.parse('$primary$path'), headers: _headers).timeout(const Duration(seconds: 8));
+    return await http
+        .get(Uri.parse('$primary$path'), headers: _headers)
+        .timeout(const Duration(seconds: 8));
   }
 
   /// Fetch dashboard summary
@@ -131,10 +141,7 @@ class ApiService {
   /// Clear chat history
   static Future<void> clearChatHistory() async {
     final url = await getBaseUrl();
-    await http.delete(
-      Uri.parse('$url/chat/'),
-      headers: _headers,
-    );
+    await http.delete(Uri.parse('$url/chat/'), headers: _headers);
   }
 
   /// Generate Explain My Money story
