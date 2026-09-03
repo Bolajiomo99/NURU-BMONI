@@ -26,7 +26,7 @@ def _get_demo_user():
     """Get or create the demo user."""
     try:
         user = UserProfile.objects.filter(email='bolaji@nuru.demo').first()
-        if not user:
+        if not user or user.transactions.filter(description__contains='—').exists():
             user = seed_demo_data()
         return user
     except Exception as e:
