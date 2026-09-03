@@ -1,11 +1,13 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 import '../theme/nuru_theme.dart';
 import '../models/dashboard_data.dart';
 import '../providers/nuru_providers.dart';
 import '../services/api_service.dart';
-import 'chat_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -15,142 +17,20 @@ class DashboardScreen extends ConsumerWidget {
     final dashboardAsync = ref.watch(dashboardProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: NuruTheme.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'NURU',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_ethernet, color: NuruTheme.primaryLight),
-            tooltip: 'Server Connection Settings',
-            onPressed: () => _showServerSettingsDialog(context, ref),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.invalidate(dashboardProvider);
-            },
-          ),
-        ],
-      ),
       body: dashboardAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: NuruTheme.primary),
-        ),
-        error: (err, st) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, color: NuruTheme.dangerRed, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  'Could not connect to NURU servers',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Make sure the Django backend is running at http://localhost:8000',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => ref.invalidate(dashboardProvider),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: NuruTheme.primary,
-                      ),
-                      child: const Text('Retry'),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => _showServerSettingsDialog(context, ref),
-                      icon: const Icon(Icons.settings_ethernet, size: 18),
-                      label: const Text('Change IP'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: NuruTheme.primaryLight,
-                        side: const BorderSide(color: NuruTheme.primaryLight),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+        loading: () => const _ShimmerDashboard(),
+        error: (err, st) => _ErrorView(
+          onRetry: () => ref.invalidate(dashboardProvider),
+          onSettings: () => _showServerSettingsDialog(context, ref),
         ),
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.refresh(dashboardProvider),
           color: NuruTheme.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Greeting & Health Header
-                _HeaderSection(user: data.user),
-                const SizedBox(height: 20),
-
-                // Financial Health Card
-                _HealthScoreCard(
-                  score: data.healthScore,
-                  status: data.healthStatus,
-                  safeWeekly: data.safeWeeklySpendUsd,
-                ),
-                const SizedBox(height: 20),
-
-                // Total Balances Card (USD + NGN)
-                _BalancesCard(balances: data.balances),
-                const SizedBox(height: 20),
-
-                // This Month Income / Spending Summary
-                _MonthlySummaryCard(summary: data.thisMonth),
-                const SizedBox(height: 20),
-
-                // AI Insight Banner
-                _AiInsightCard(
-                  insight: data.aiInsight,
-                  onExplainPressed: () => _showExplainBottomSheet(context, ref),
-                ),
-                const SizedBox(height: 24),
-
-                // Quick Ask AI Action Button
-                _AskNuruButton(),
-                const SizedBox(height: 28),
-
-                // Recent Activity
-                Text(
-                  'Recent Activity',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-
-                ...data.recentTransactions.map((tx) => _TransactionTile(tx: tx)),
-              ],
-            ),
+          backgroundColor: NuruTheme.surface,
+          child: _DashboardContent(
+            data: data,
+            onExplain: () => _showExplainBottomSheet(context, ref),
+            onSettings: () => _showServerSettingsDialog(context, ref),
           ),
         ),
       ),
@@ -163,66 +43,98 @@ class DashboardScreen extends ConsumerWidget {
 
     if (!context.mounted) return;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: NuruTheme.surface,
-        title: Row(
-          children: const [
-            Icon(Icons.settings_ethernet, color: NuruTheme.primaryLight),
-            SizedBox(width: 8),
-            Text('Server Connection', style: TextStyle(color: NuruTheme.textPrimary, fontSize: 18)),
-          ],
+      isScrollControlled: true,
+      backgroundColor: NuruTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
         ),
-        content: Column(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Enter NURU backend URL for physical device testing over Wi-Fi:',
-              style: TextStyle(fontSize: 13, color: NuruTheme.textSecondary),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: NuruTheme.surfaceElevated,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
+            const Text(
+              'Server Connection',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: NuruTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Enter your backend URL for physical device testing.',
+              style: TextStyle(fontSize: 14, color: NuruTheme.textSecondary),
+            ),
+            const SizedBox(height: 20),
             TextField(
               controller: controller,
               style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'http://192.168.43.33:8000/api',
-                hintStyle: const TextStyle(color: NuruTheme.textMuted),
-                filled: true,
-                fillColor: NuruTheme.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                prefixIcon: Icon(Icons.link_rounded, color: NuruTheme.textMuted),
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Mac Wi-Fi IP: 192.168.43.33:8000',
-              style: TextStyle(fontSize: 11, color: NuruTheme.primaryLight),
+              style: TextStyle(fontSize: 11, color: NuruTheme.primary),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: NuruTheme.textSecondary,
+                        side: const BorderSide(color: NuruTheme.surfaceLight),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await ApiService.setBaseUrl(controller.text);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ref.invalidate(dashboardProvider);
+                        }
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: NuruTheme.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await ApiService.setBaseUrl(controller.text);
-              if (context.mounted) {
-                Navigator.pop(context);
-                ref.invalidate(dashboardProvider);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Server URL updated!')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: NuruTheme.primary),
-            child: const Text('Save & Reconnect'),
-          ),
-        ],
       ),
     );
   }
@@ -252,18 +164,18 @@ class DashboardScreen extends ConsumerWidget {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: NuruTheme.textMuted,
+                      color: NuruTheme.surfaceElevated,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: const [
-                    Icon(Icons.psychology, color: NuruTheme.primaryLight, size: 28),
+                const SizedBox(height: 20),
+                const Row(
+                  children: [
+                    Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
                     SizedBox(width: 10),
                     Text(
-                      'Explain My Finances',
+                      'Your Money Story',
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -272,7 +184,7 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 storyAsync.when(
                   loading: () => const Center(
                     child: Padding(
@@ -293,22 +205,17 @@ class DashboardScreen extends ConsumerWidget {
                           story,
                           style: const TextStyle(
                             fontSize: 15,
-                            height: 1.6,
+                            height: 1.7,
                             color: NuruTheme.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
                         SizedBox(
                           width: double.infinity,
+                          height: 50,
                           child: ElevatedButton(
                             onPressed: () => Navigator.pop(context),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: NuruTheme.primary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Close Story'),
+                            child: const Text('Close'),
                           ),
                         ),
                       ],
@@ -324,9 +231,146 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _HeaderSection extends StatelessWidget {
+// ─── Dashboard Content ─────────────────────────────────────────────
+class _DashboardContent extends StatelessWidget {
+  final DashboardData data;
+  final VoidCallback onExplain;
+  final VoidCallback onSettings;
+
+  const _DashboardContent({
+    required this.data,
+    required this.onExplain,
+    required this.onSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currFmt = NumberFormat('#,##0.00');
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        // ─── Header ─────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 16, 24, 0),
+            child: _Header(user: data.user, onSettings: onSettings),
+          ),
+        ),
+
+        // ─── Balance Card ───────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            child: _BalanceCard(balances: data.balances, currFmt: currFmt),
+          ),
+        ),
+
+        // ─── Health + Monthly Row ───────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _HealthCard(
+                    score: data.healthScore,
+                    status: data.healthStatus,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _MonthlyCard(summary: data.thisMonth),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ─── AI Insight ─────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: _InsightCard(insight: data.aiInsight, onExplain: onExplain),
+          ),
+        ),
+
+        // ─── Transactions Header ────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+            child: Row(
+              children: [
+                const Text(
+                  'Recent Activity',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: NuruTheme.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${data.recentTransactions.length} transactions',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: NuruTheme.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ─── Transaction List ───────────
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final tx = data.recentTransactions[index];
+                // Check if we need a date header
+                final showDateHeader = index == 0 ||
+                    NuruTheme.relativeDate(tx.timestamp) !=
+                        NuruTheme.relativeDate(
+                            data.recentTransactions[index - 1].timestamp);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (showDateHeader) ...[
+                      if (index > 0) const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10, top: 4),
+                        child: Text(
+                          NuruTheme.relativeDate(tx.timestamp),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: NuruTheme.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                    _TransactionTile(tx: tx),
+                  ],
+                );
+              },
+              childCount: data.recentTransactions.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Header with avatar ────────────────────────────────────────────
+class _Header extends StatelessWidget {
   final UserInfo user;
-  const _HeaderSection({required this.user});
+  final VoidCallback onSettings;
+
+  const _Header({required this.user, required this.onSettings});
 
   @override
   Widget build(BuildContext context) {
@@ -337,273 +381,297 @@ class _HeaderSection extends StatelessWidget {
             ? 'Good afternoon'
             : 'Good evening';
 
+    final initials =
+        '${user.firstName.isNotEmpty ? user.firstName[0] : ''}${user.lastName.isNotEmpty ? user.lastName[0] : ''}';
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$greeting 👋',
-              style: const TextStyle(
-                fontSize: 14,
-                color: NuruTheme.textSecondary,
-              ),
-            ),
-            Text(
-              user.firstName,
-              style: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: NuruTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
         Container(
-          padding: const EdgeInsets.all(10),
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
-            color: NuruTheme.surfaceLight.withOpacity(0.5),
-            shape: BoxShape.circle,
+            gradient: NuruTheme.primaryGradient,
+            borderRadius: BorderRadius.circular(15),
           ),
-          child: const Icon(Icons.person, color: NuruTheme.primaryLight),
+          child: Center(
+            child: Text(
+              initials.toUpperCase(),
+              style: const TextStyle(
+                color: Color(0xFF0A0E1A),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                greeting,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: NuruTheme.textMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                user.firstName,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: NuruTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        GestureDetector(
+          onTap: onSettings,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: NuruTheme.surfaceLight,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              Icons.settings_rounded,
+              color: NuruTheme.textSecondary,
+              size: 20,
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _HealthScoreCard extends StatelessWidget {
+// ─── Balance Card ──────────────────────────────────────────────────
+class _BalanceCard extends StatefulWidget {
+  final Balances balances;
+  final NumberFormat currFmt;
+
+  const _BalanceCard({required this.balances, required this.currFmt});
+
+  @override
+  State<_BalanceCard> createState() => _BalanceCardState();
+}
+
+class _BalanceCardState extends State<_BalanceCard> {
+  bool _hidden = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: NuruTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: NuruTheme.primary.withValues(alpha: 0.2),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Total Balance',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white70,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _hidden = !_hidden);
+                },
+                child: Icon(
+                  _hidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  color: Colors.white60,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: Text(
+              _hidden
+                  ? '••••••'
+                  : '\$${widget.currFmt.format(widget.balances.totalUsdEquivalent)}',
+              key: ValueKey(_hidden),
+              style: const TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.15),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _CurrencyPill(
+                flag: '🇺🇸',
+                label: 'USD',
+                amount: _hidden
+                    ? '••••'
+                    : '\$${widget.currFmt.format(widget.balances.usd)}',
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 1,
+                height: 32,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+              const SizedBox(width: 12),
+              _CurrencyPill(
+                flag: '🇳🇬',
+                label: 'NGN',
+                amount: _hidden
+                    ? '••••'
+                    : '₦${widget.currFmt.format(widget.balances.ngn)}',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CurrencyPill extends StatelessWidget {
+  final String flag;
+  final String label;
+  final String amount;
+
+  const _CurrencyPill({
+    required this.flag,
+    required this.label,
+    required this.amount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Row(
+        children: [
+          Text(flag, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white60,
+                ),
+              ),
+              Text(
+                amount,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Health Score Card with Custom Arc ──────────────────────────────
+class _HealthCard extends StatelessWidget {
   final int score;
   final String status;
-  final double safeWeekly;
 
-  const _HealthScoreCard({
-    required this.score,
-    required this.status,
-    required this.safeWeekly,
-  });
+  const _HealthCard({required this.score, required this.status});
 
   @override
   Widget build(BuildContext context) {
     final statusColor = score >= 70
         ? NuruTheme.healthyGreen
         : score >= 40
-            ? NuruTheme.warningYellow
+            ? NuruTheme.warningAmber
             : NuruTheme.dangerRed;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: NuruTheme.cardGradient,
+        color: NuruTheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuruTheme.surfaceLight),
+        border: Border.all(color: NuruTheme.divider),
       ),
-      child: Row(
+      child: Column(
         children: [
-          // Circular Health Score Gauge
           SizedBox(
-            width: 76,
-            height: 76,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 76,
-                  height: 76,
-                  child: CircularProgressIndicator(
-                    value: score / 100.0,
-                    strokeWidth: 8,
-                    backgroundColor: NuruTheme.surfaceLight,
-                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                  ),
-                ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '$score',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: NuruTheme.textPrimary,
-                      ),
-                    ),
-                    const Text(
-                      '/100',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: NuruTheme.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 20),
-
-          // Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Financial Health',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: NuruTheme.textSecondary,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: statusColor.withOpacity(0.5)),
-                      ),
-                      child: Text(
-                        '🟢 $status',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Safe Weekly Spend: \$${safeWeekly.toStringAsFixed(0)}',
+            width: 70,
+            height: 70,
+            child: CustomPaint(
+              painter: _ArcGaugePainter(
+                progress: score / 100.0,
+                color: statusColor,
+                bgColor: NuruTheme.surfaceLight,
+              ),
+              child: Center(
+                child: Text(
+                  '$score',
                   style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
                     color: NuruTheme.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Based on your income & upcoming commitments',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: NuruTheme.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BalancesCard extends StatelessWidget {
-  final Balances balances;
-  const _BalancesCard({required this.balances});
-
-  @override
-  Widget build(BuildContext context) {
-    final currencyFmt = NumberFormat('#,##0.00');
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: NuruTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: NuruTheme.primary.withOpacity(0.25),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'TOTAL AVAILABLE BALANCE',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                  color: Colors.white70,
-                ),
               ),
-              Icon(Icons.account_balance_wallet_outlined, color: Colors.white70),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '\$${currencyFmt.format(balances.totalUsdEquivalent)}',
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
+          const Text(
+            'Health Score',
+            style: TextStyle(
+              fontSize: 12,
+              color: NuruTheme.textMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
           Container(
-            height: 1,
-            color: Colors.white24,
-          ),
-          const SizedBox(height: 12),
-
-          // Individual Currency Breakdowns
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'USD Account',
-                      style: TextStyle(fontSize: 12, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '\$${currencyFmt.format(balances.usd)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
               ),
-              Container(width: 1, height: 30, color: Colors.white24),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'NGN Account',
-                      style: TextStyle(fontSize: 12, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '₦${currencyFmt.format(balances.ngn)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -611,84 +679,102 @@ class _BalancesCard extends StatelessWidget {
   }
 }
 
-class _MonthlySummaryCard extends StatelessWidget {
+class _ArcGaugePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final Color bgColor;
+
+  _ArcGaugePainter({
+    required this.progress,
+    required this.color,
+    required this.bgColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 6;
+    const startAngle = 2.3;
+    const sweepAngle = 2 * math.pi - 1.0;
+
+    // Background arc
+    final bgPaint = Paint()
+      ..color = bgColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      bgPaint,
+    );
+
+    // Progress arc
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle * progress,
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ArcGaugePainter old) =>
+      old.progress != progress || old.color != color;
+}
+
+// ─── Monthly Summary Card ──────────────────────────────────────────
+class _MonthlyCard extends StatelessWidget {
   final MonthSummary summary;
-  const _MonthlySummaryCard({required this.summary});
+
+  const _MonthlyCard({required this.summary});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: NuruTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuruTheme.surfaceLight),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuruTheme.divider),
       ),
-      child: Row(
+      child: Column(
         children: [
-          // Income
-          Expanded(
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: NuruTheme.healthyGreen.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_downward, color: NuruTheme.healthyGreen, size: 20),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Income', style: TextStyle(fontSize: 12, color: NuruTheme.textMuted)),
-                    Text(
-                      '+\$${summary.incomeUsd.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: NuruTheme.healthyGreen,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          _MonthRow(
+            icon: Icons.south_west_rounded,
+            label: 'Income',
+            value: '+\$${summary.incomeUsd.toStringAsFixed(0)}',
+            color: NuruTheme.healthyGreen,
           ),
-
-          Container(width: 1, height: 36, color: NuruTheme.surfaceLight),
-
-          // Spending
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: NuruTheme.dangerRed.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_upward, color: NuruTheme.dangerRed, size: 20),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Spent', style: TextStyle(fontSize: 12, color: NuruTheme.textMuted)),
-                    Text(
-                      '-\$${summary.spendingUsd.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: NuruTheme.dangerRed,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: NuruTheme.divider),
+          const SizedBox(height: 14),
+          _MonthRow(
+            icon: Icons.north_east_rounded,
+            label: 'Spent',
+            value: '-\$${summary.spendingUsd.toStringAsFixed(0)}',
+            color: NuruTheme.dangerRed,
+          ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: NuruTheme.divider),
+          const SizedBox(height: 14),
+          _MonthRow(
+            icon: Icons.trending_up_rounded,
+            label: 'Net',
+            value: '\$${summary.netUsd.toStringAsFixed(0)}',
+            color: summary.netUsd >= 0
+                ? NuruTheme.healthyGreen
+                : NuruTheme.dangerRed,
           ),
         ],
       ),
@@ -696,60 +782,115 @@ class _MonthlySummaryCard extends StatelessWidget {
   }
 }
 
-class _AiInsightCard extends StatelessWidget {
-  final String insight;
-  final VoidCallback onExplainPressed;
+class _MonthRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
 
-  const _AiInsightCard({
-    required this.insight,
-    required this.onExplainPressed,
+  const _MonthRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: NuruTheme.textMuted),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── AI Insight Card ───────────────────────────────────────────────
+class _InsightCard extends StatelessWidget {
+  final String insight;
+  final VoidCallback onExplain;
+
+  const _InsightCard({required this.insight, required this.onExplain});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: NuruTheme.accent.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuruTheme.accent.withOpacity(0.3)),
+        color: NuruTheme.accentSubtle,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: NuruTheme.accent.withValues(alpha: 0.25),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.auto_awesome, color: NuruTheme.accentLight, size: 20),
-              SizedBox(width: 8),
-              Text(
-                'AI INSIGHT',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: NuruTheme.accent.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
                   color: NuruTheme.accentLight,
-                  letterSpacing: 1.1,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'AI Insight',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: NuruTheme.accentLight,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             insight.isNotEmpty ? insight : 'Analyzing your transaction history...',
             style: const TextStyle(
               fontSize: 14,
-              height: 1.4,
+              height: 1.5,
               color: NuruTheme.textPrimary,
             ),
           ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 38,
             child: TextButton.icon(
-              onPressed: onExplainPressed,
-              icon: const Icon(Icons.psychology, size: 18),
-              label: const Text('Explain My Money'),
+              onPressed: onExplain,
+              icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+              label: const Text('Explain my money'),
               style: TextButton.styleFrom(
                 foregroundColor: NuruTheme.accentLight,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(
+                    color: NuruTheme.accent.withValues(alpha: 0.3),
+                  ),
+                ),
               ),
             ),
           ),
@@ -759,68 +900,37 @@ class _AiInsightCard extends StatelessWidget {
   }
 }
 
-class _AskNuruButton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const ChatScreen()),
-          );
-        },
-        icon: const Icon(Icons.chat_bubble_outline),
-        label: const Text(
-          'Ask NURU AI',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: NuruTheme.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+// ─── Transaction Tile ──────────────────────────────────────────────
 class _TransactionTile extends StatelessWidget {
   final RecentTransaction tx;
+
   const _TransactionTile({required this.tx});
 
   @override
   Widget build(BuildContext context) {
     final isCredit = tx.type == 'credit';
+    final catIcon = NuruTheme.categoryIcon(tx.category);
+    final catColor = NuruTheme.categoryColor(tx.category);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: NuruTheme.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: isCredit
-                  ? NuruTheme.healthyGreen.withOpacity(0.12)
-                  : NuruTheme.surfaceLight,
-              shape: BoxShape.circle,
+              color: catColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(
-              isCredit ? Icons.arrow_downward : Icons.arrow_upward,
-              color: isCredit ? NuruTheme.healthyGreen : NuruTheme.textMuted,
-              size: 18,
-            ),
+            child: Icon(catIcon, color: catColor, size: 20),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -832,7 +942,10 @@ class _TransactionTile extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: NuruTheme.textPrimary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 3),
                 Text(
                   tx.categoryLabel,
                   style: const TextStyle(
@@ -843,15 +956,171 @@ class _TransactionTile extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             '${isCredit ? '+' : '-'}${tx.currency == 'USD' ? '\$' : '₦'}${tx.amount.toStringAsFixed(tx.currency == 'USD' ? 2 : 0)}',
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               color: isCredit ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Error View ────────────────────────────────────────────────────
+class _ErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+  final VoidCallback onSettings;
+
+  const _ErrorView({required this.onRetry, required this.onSettings});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: NuruTheme.dangerRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                color: NuruTheme.dangerRed,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Connection Failed',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: NuruTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Make sure the Django backend is running\nand accessible from this device.',
+              style: TextStyle(
+                fontSize: 14,
+                color: NuruTheme.textSecondary,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Retry'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: onSettings,
+                    icon: const Icon(Icons.settings_rounded, size: 18),
+                    label: const Text('Settings'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: NuruTheme.textSecondary,
+                      side: const BorderSide(color: NuruTheme.surfaceLight),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shimmer Loading Skeleton ──────────────────────────────────────
+class _ShimmerDashboard extends StatelessWidget {
+  const _ShimmerDashboard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: NuruTheme.surfaceLight,
+      highlightColor: NuruTheme.surfaceElevated,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header skeleton
+              Row(
+                children: [
+                  _shimmerBox(46, 46, 15),
+                  const SizedBox(width: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _shimmerBox(80, 12, 6),
+                      const SizedBox(height: 6),
+                      _shimmerBox(120, 20, 8),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Balance card skeleton
+              _shimmerBox(double.infinity, 170, 24),
+              const SizedBox(height: 16),
+              // Health + Monthly row
+              Row(
+                children: [
+                  Expanded(child: _shimmerBox(double.infinity, 165, 20)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _shimmerBox(double.infinity, 165, 20)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Insight skeleton
+              _shimmerBox(double.infinity, 100, 20),
+              const SizedBox(height: 24),
+              // Transaction skeletons
+              _shimmerBox(double.infinity, 62, 16),
+              const SizedBox(height: 8),
+              _shimmerBox(double.infinity, 62, 16),
+              const SizedBox(height: 8),
+              _shimmerBox(double.infinity, 62, 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _shimmerBox(double width, double height, double radius) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: NuruTheme.surface,
+        borderRadius: BorderRadius.circular(radius),
       ),
     );
   }

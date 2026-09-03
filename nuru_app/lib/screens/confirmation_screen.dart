@@ -1,49 +1,83 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/nuru_theme.dart';
 import '../providers/nuru_providers.dart';
 import '../services/api_service.dart';
-import 'dashboard_screen.dart';
+import 'bottom_nav_shell.dart';
 
 class ConfirmationScreen extends ConsumerStatefulWidget {
   const ConfirmationScreen({super.key});
 
   @override
-  ConsumerState<ConfirmationScreen> createState() => _ConfirmationScreenState();
+  ConsumerState<ConfirmationScreen> createState() =>
+      _ConfirmationScreenState();
 }
 
-class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
+class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
+    with TickerProviderStateMixin {
   int _currentStep = 0;
   bool _isFinished = false;
   String _updatedBalanceText = '';
 
-  final List<Map<String, String>> _pipelineSteps = [
-    {
-      'title': 'NURU AI Financial Brain',
-      'detail': 'Affordability & safe spending threshold verified',
-    },
-    {
-      'title': 'BMONI Proposal Created',
-      'detail': 'POST /v1/users/{userId}/smart-wallets/proposals',
-    },
-    {
-      'title': 'Admin Approval Vote',
-      'detail': 'POST /proposals/{proposalId}/approve',
-    },
-    {
-      'title': 'On-Device Secure Enclave Signature',
-      'detail': 'bmoni_embedded_sdk signed 32-byte digest on-device',
-    },
-    {
-      'title': 'BMONI Settlement Completed',
-      'detail': 'Transaction settled on-chain & balances updated',
-    },
+  late final AnimationController _successController;
+  late final Animation<double> _successScale;
+  late final Animation<double> _successOpacity;
+
+  final List<_PipelineStep> _pipelineSteps = [
+    _PipelineStep(
+      title: 'AI Financial Verification',
+      detail: 'Affordability & safe threshold verified',
+      icon: Icons.psychology_rounded,
+    ),
+    _PipelineStep(
+      title: 'BMONI Proposal Created',
+      detail: 'Smart wallet proposal submitted',
+      icon: Icons.description_rounded,
+    ),
+    _PipelineStep(
+      title: 'Admin Approval',
+      detail: 'Proposal approval vote confirmed',
+      icon: Icons.verified_rounded,
+    ),
+    _PipelineStep(
+      title: 'Secure Signature',
+      detail: 'On-device Secure Enclave signing',
+      icon: Icons.fingerprint_rounded,
+    ),
+    _PipelineStep(
+      title: 'Settlement Complete',
+      detail: 'Transaction settled & balances updated',
+      icon: Icons.check_circle_rounded,
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
+    _successController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _successScale = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _successController,
+        curve: Curves.elasticOut,
+      ),
+    );
+    _successOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _successController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+      ),
+    );
     _startPipelineExecution();
+  }
+
+  @override
+  void dispose() {
+    _successController.dispose();
+    super.dispose();
   }
 
   Future<void> _startPipelineExecution() async {
@@ -54,24 +88,28 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
     for (int i = 0; i < _pipelineSteps.length; i++) {
       await Future.delayed(const Duration(milliseconds: 700));
       if (mounted) {
+        HapticFeedback.lightImpact();
         setState(() {
           _currentStep = i + 1;
         });
       }
     }
 
-    // Call API backend to record transaction
+    // Call API backend
     try {
       if (isTransfer) {
         final currency = action?.currency ?? 'USD';
-        final toAddr = (action?.to ?? '').isNotEmpty ? action!.to : '0x70997970C51812dc...79C8';
+        final toAddr = (action?.to ?? '').isNotEmpty
+            ? action!.to
+            : '0x70997970C51812dc...79C8';
         final result = await ApiService.executeTransfer(
           amount: amount,
           currency: currency,
           toAddress: toAddr,
           description: 'Family support transfer',
         );
-        _updatedBalanceText = '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';
+        _updatedBalanceText =
+            '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';
       } else {
         final fromCurr = action.fromCurrency;
         final toCurr = action.toCurrency;
@@ -80,7 +118,8 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
           fromCurrency: fromCurr,
           toCurrency: toCurr,
         );
-        _updatedBalanceText = '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';
+        _updatedBalanceText =
+            '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';
       }
     } catch (e) {
       _updatedBalanceText = '\$2,205.55';
@@ -90,7 +129,8 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
       setState(() {
         _isFinished = true;
       });
-      // Refresh dashboard state
+      HapticFeedback.heavyImpact();
+      _successController.forward();
       ref.invalidate(dashboardProvider);
     }
   }
@@ -102,49 +142,67 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
     final isTransfer = action?.type == 'transfer';
 
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'TRANSACTION STATUS',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 16),
-        ),
-      ),
+      backgroundColor: NuruTheme.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              // Header Icon
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 500),
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: _isFinished
-                      ? NuruTheme.healthyGreen.withOpacity(0.2)
-                      : NuruTheme.primary.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _isFinished ? NuruTheme.healthyGreen : NuruTheme.primary,
-                    width: 2,
-                  ),
-                ),
-                child: Icon(
-                  _isFinished ? Icons.check_circle : Icons.sync,
-                  color: _isFinished ? NuruTheme.healthyGreen : NuruTheme.primaryLight,
-                  size: 44,
-                ),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-              Text(
-                _isFinished
-                    ? '${isTransfer ? "Transfer" : "Conversion"} Completed!'
-                    : 'Processing Transaction...',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: NuruTheme.textPrimary,
+              // ─── Status Header ────────────────
+              AnimatedBuilder(
+                animation: _successController,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _isFinished
+                        ? 0.8 + 0.2 * _successScale.value
+                        : 1.0,
+                    child: AnimatedOpacity(
+                      opacity: 1.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: _isFinished
+                              ? NuruTheme.healthyGreen.withValues(alpha: 0.15)
+                              : NuruTheme.primarySubtle,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _isFinished
+                                ? NuruTheme.healthyGreen
+                                : NuruTheme.primary.withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          _isFinished
+                              ? Icons.check_rounded
+                              : Icons.sync_rounded,
+                          color: _isFinished
+                              ? NuruTheme.healthyGreen
+                              : NuruTheme.primary,
+                          size: 38,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Text(
+                  _isFinished
+                      ? '${isTransfer == true ? "Transfer" : "Conversion"} Complete!'
+                      : 'Processing...',
+                  key: ValueKey(_isFinished),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: NuruTheme.textPrimary,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -152,95 +210,121 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
                 '\$${amount.toStringAsFixed(2)} ${action?.currency ?? "USD"}',
                 style: const TextStyle(
                   fontSize: 16,
-                  color: NuruTheme.primaryLight,
+                  color: NuruTheme.primary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 32),
 
-              // Step-by-Step Progress Pipeline
+              // ─── Pipeline Timeline ────────────
               Expanded(
                 child: ListView.builder(
                   itemCount: _pipelineSteps.length,
                   itemBuilder: (context, index) {
-                    final stepNum = index + 1;
-                    final isDone = _currentStep >= stepNum;
-                    final isCurrent = _currentStep == stepNum && !_isFinished;
+                    final step = _pipelineSteps[index];
+                    final isDone = _currentStep > index;
+                    final isCurrent =
+                        _currentStep == index + 1 && !_isFinished;
+                    final isLast = index == _pipelineSteps.length - 1;
 
-                    return _PipelineStepTile(
-                      stepNumber: stepNum,
-                      title: _pipelineSteps[index]['title']!,
-                      detail: _pipelineSteps[index]['detail']!,
+                    return _TimelineStepTile(
+                      step: step,
                       isDone: isDone,
                       isCurrent: isCurrent,
+                      isLast: isLast,
                     );
                   },
                 ),
               ),
 
+              // ─── Result Card ──────────────────
               if (_isFinished) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: NuruTheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: NuruTheme.healthyGreen.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.shield, color: NuruTheme.healthyGreen),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Financial Health Maintained',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: NuruTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'New USD Balance: $_updatedBalanceText | Health Score: 72 (Good)',
-                              style: const TextStyle(fontSize: 12, color: NuruTheme.textMuted),
-                            ),
-                          ],
-                        ),
+                FadeTransition(
+                  opacity: _successOpacity,
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: NuruTheme.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: NuruTheme.healthyGreen.withValues(alpha: 0.3),
                       ),
-                    ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: NuruTheme.healthyGreen.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.shield_rounded,
+                            color: NuruTheme.healthyGreen,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Financial Health Maintained',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: NuruTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'New Balance: $_updatedBalanceText',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: NuruTheme.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
               ],
 
-              // Done Button
+              // ─── Done Button ──────────────────
               SizedBox(
                 width: double.infinity,
                 height: 56,
-                child: ElevatedButton(
-                  onPressed: _isFinished
-                      ? () {
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(
-                              builder: (context) => const DashboardScreen(),
-                            ),
-                            (route) => false,
-                          );
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: NuruTheme.primary,
-                    disabledBackgroundColor: NuruTheme.surfaceLight,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                child: AnimatedOpacity(
+                  opacity: _isFinished ? 1.0 : 0.4,
+                  duration: const Duration(milliseconds: 300),
+                  child: ElevatedButton(
+                    onPressed: _isFinished
+                        ? () {
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (context) => const BottomNavShell(),
+                              ),
+                              (route) => false,
+                            );
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      disabledBackgroundColor: NuruTheme.surfaceLight,
+                      disabledForegroundColor: NuruTheme.textMuted,
                     ),
-                  ),
-                  child: Text(
-                    _isFinished ? 'Return to Dashboard' : 'Executing BMONI Flow...',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    child: Text(
+                      _isFinished ? 'Return to Dashboard' : 'Processing...',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -252,89 +336,134 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen> {
   }
 }
 
-class _PipelineStepTile extends StatelessWidget {
-  final int stepNumber;
+// ─── Pipeline Step Data ────────────────────────────────────────────
+class _PipelineStep {
   final String title;
   final String detail;
-  final bool isDone;
-  final bool isCurrent;
+  final IconData icon;
 
-  const _PipelineStepTile({
-    required this.stepNumber,
+  const _PipelineStep({
     required this.title,
     required this.detail,
+    required this.icon,
+  });
+}
+
+// ─── Timeline Step Tile ────────────────────────────────────────────
+class _TimelineStepTile extends StatelessWidget {
+  final _PipelineStep step;
+  final bool isDone;
+  final bool isCurrent;
+  final bool isLast;
+
+  const _TimelineStepTile({
+    required this.step,
     required this.isDone,
     required this.isCurrent,
+    required this.isLast,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+    return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Step Icon Indicator
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: isDone
-                  ? NuruTheme.healthyGreen
-                  : isCurrent
-                      ? NuruTheme.primary
-                      : NuruTheme.surfaceLight,
-              shape: BoxShape.circle,
-            ),
-            child: isDone
-                ? const Icon(Icons.check, color: Colors.white, size: 18)
-                : isCurrent
-                    ? const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Center(
-                        child: Text(
-                          '$stepNumber',
-                          style: const TextStyle(
-                            color: NuruTheme.textMuted,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-          ),
-          const SizedBox(width: 14),
-
-          // Title & Details
-          Expanded(
+          // Timeline column
+          SizedBox(
+            width: 44,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                // Node
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
                     color: isDone
-                        ? NuruTheme.textPrimary
+                        ? NuruTheme.healthyGreen.withValues(alpha: 0.15)
                         : isCurrent
-                            ? NuruTheme.primaryLight
-                            : NuruTheme.textMuted,
+                            ? NuruTheme.primarySubtle
+                            : NuruTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: isDone
+                        ? Border.all(
+                            color: NuruTheme.healthyGreen.withValues(alpha: 0.4),
+                          )
+                        : isCurrent
+                            ? Border.all(
+                                color: NuruTheme.primary.withValues(alpha: 0.4),
+                              )
+                            : null,
                   ),
+                  child: isDone
+                      ? const Icon(Icons.check_rounded,
+                          color: NuruTheme.healthyGreen, size: 18)
+                      : isCurrent
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: NuruTheme.primary,
+                                ),
+                              ),
+                            )
+                          : Icon(step.icon,
+                              color: NuruTheme.textMuted, size: 16),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  detail,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: NuruTheme.textMuted,
+                // Connector line
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDone
+                            ? NuruTheme.healthyGreen.withValues(alpha: 0.3)
+                            : NuruTheme.divider,
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
                   ),
-                ),
               ],
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 6),
+                  Text(
+                    step.title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isDone
+                          ? NuruTheme.textPrimary
+                          : isCurrent
+                              ? NuruTheme.primary
+                              : NuruTheme.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    step.detail,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: NuruTheme.textMuted,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
