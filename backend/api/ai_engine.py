@@ -14,8 +14,9 @@ from .analytics import get_financial_summary, can_afford, NGN_TO_USD_RATE
 
 logger = logging.getLogger(__name__)
 
-# Configure Gemini client
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
+def _get_client():
+    api_key = getattr(settings, 'GEMINI_API_KEY', '') or os.getenv('GEMINI_API_KEY', '')
+    return genai.Client(api_key=api_key)
 
 MODEL_NAME = 'gemini-3.1-flash-lite'
 
@@ -95,6 +96,7 @@ def chat_with_nuru(user, message):
     )
 
     try:
+        client = _get_client()
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=contents,
@@ -166,6 +168,7 @@ Keep the total response under 300 words but make every word count.
 """
 
     try:
+        client = _get_client()
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
@@ -212,6 +215,7 @@ Safe weekly spend: ${summary['safe_weekly_spend_usd']:.2f}
 Respond with ONLY the insight text, nothing else."""
 
     try:
+        client = _get_client()
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
