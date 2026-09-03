@@ -1,0 +1,198 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/dashboard_data.dart';
+import '../models/chat_message.dart';
+
+class ApiService {
+  static const String _urlKey = 'nuru_backend_api_url';
+  static String? _cachedUrl;
+
+  /// Get active API base URL (supports local Wi-Fi IP for physical Android/iOS devices)
+  static Future<String> getBaseUrl() async {
+    if (_cachedUrl != null && _cachedUrl!.isNotEmpty) {
+      return _cachedUrl!;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString(_urlKey);
+
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      _cachedUrl = savedUrl;
+      return savedUrl;
+    }
+
+    // Default fallbacks based on environment
+    if (kIsWeb) {
+      _cachedUrl = 'http://localhost:8000/api';
+    } else if (Platform.isAndroid) {
+      // 192.168.43.33 is the host Wi-Fi IP for physical devices, 10.0.2.2 for emulator
+      _cachedUrl = 'http://192.168.43.33:8000/api';
+    } else if (Platform.isIOS) {
+      _cachedUrl = 'http://192.168.43.33:8000/api';
+    } else {
+      _cachedUrl = 'http://localhost:8000/api';
+    }
+
+    return _cachedUrl!;
+  }
+
+  /// Update backend URL for physical device testing over Wi-Fi
+  static Future<void> setBaseUrl(String newUrl) async {
+    String formatted = newUrl.trim();
+    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+      formatted = 'http://$formatted';
+    }
+    if (!formatted.endsWith('/api')) {
+      formatted = formatted.endsWith('/') ? '${formatted}api' : '$formatted/api';
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_urlKey, formatted);
+    _cachedUrl = formatted;
+    debugPrint('⚙️ Updated NURU backend URL to: $formatted');
+  }
+
+  static Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+  /// Fetch dashboard summary
+  static Future<DashboardData> fetchDashboard() async {
+    final url = await getBaseUrl();
+    final response = await http
+        .get(
+          Uri.parse('$url/dashboard/'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 12));
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return DashboardData.fromJson(json);
+    } else {
+      throw Exception('Failed to load dashboard: ${response.body}');
+    }
+  }
+
+  /// Send message to NURU AI
+  static Future<ChatMessageItem> sendMessage(String message) async {
+    final url = await getBaseUrl();
+    final response = await http
+        .post(
+          Uri.parse('$url/chat/'),
+          headers: _headers,
+          body: jsonEncode({'message': message}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return ChatMessageItem.fromJson(json);
+    } else {
+      throw Exception('Failed to send message: ${response.body}');
+    }
+  }
+
+  /// Get chat history
+  static Future<List<ChatMessageItem>> fetchChatHistory() async {
+    final url = await getBaseUrl();
+    final response = await http
+        .get(
+          Uri.parse('$url/chat/'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      final List list = json['messages'] ?? [];
+      return list.map((item) => ChatMessageItem.fromJson(item)).toList();
+    } else {
+      throw Exception('Failed to load chat history');
+    }
+  }
+
+  /// Clear chat history
+  static Future<void> clearChatHistory() async {
+    final url = await getBaseUrl();
+    await http.delete(
+      Uri.parse('$url/chat/'),
+      headers: _headers,
+    );
+  }
+
+  /// Generate Explain My Money story
+  static Future<Map<String, dynamic>> explainFinances() async {
+    final url = await getBaseUrl();
+    final response = await http
+        .get(
+          Uri.parse('$url/explain/'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to generate financial story');
+    }
+  }
+
+  /// Execute BMONI Transfer Action
+  static Future<Map<String, dynamic>> executeTransfer({
+    required double amount,
+    required String currency,
+    required String toAddress,
+    String description = '',
+  }) async {
+    final url = await getBaseUrl();
+    final response = await http
+        .post(
+          Uri.parse('$url/action/transfer/'),
+          headers: _headers,
+          body: jsonEncode({
+            'amount': amount,
+            'currency': currency,
+            'to_address': toAddress,
+            'description': description,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Transfer action failed: ${response.body}');
+    }
+  }
+
+  /// Execute BMONI Swap Action
+  static Future<Map<String, dynamic>> executeSwap({
+    required double amount,
+    required String fromCurrency,
+    required String toCurrency,
+  }) async {
+    final url = await getBaseUrl();
+    final response = await http
+        .post(
+          Uri.parse('$url/action/swap/'),
+          headers: _headers,
+          body: jsonEncode({
+            'amount': amount,
+            'from_currency': fromCurrency,
+            'to_currency': toCurrency,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Swap action failed: ${response.body}');
+    }
+  }
+}

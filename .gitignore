@@ -1,0 +1,30 @@
+# Secrets & Environment
+backend/.env
+*.env
+
+# Python & Django
+backend/venv/
+backend/*venv*/
+backend/__pycache__/
+backend/*.pyc
+backend/db.sqlite3
+backend/db.sqlite3-journal
+
+# Flutter
+nuru_app/.dart_tool/
+nuru_app/.flutter-plugins
+nuru_app/.flutter-plugins-dependencies
+nuru_app/.packages
+nuru_app/build/
+nuru_app/android/.gradle/
+nuru_app/android/app/build/
+nuru_app/ios/Pods/
+nuru_app/ios/.symlinks/
+nuru_app/ios/Flutter/Flutter.framework
+nuru_app/ios/Flutter/Flutter.podspec
+
+# System & IDE
+.DS_Store
+.vscode/
+.idea/
+*.log
