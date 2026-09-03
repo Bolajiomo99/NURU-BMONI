@@ -13,6 +13,7 @@ class ApiService {
   /// Candidate URLs to test if primary fails
   static List<String> get _candidateUrls {
     return [
+      'https://nuru-bmoni.up.railway.app/api',
       'http://192.168.43.33:8000/api',
       'http://10.0.2.2:8000/api',
       'http://localhost:8000/api',
@@ -34,16 +35,7 @@ class ApiService {
       return savedUrl;
     }
 
-    if (kIsWeb) {
-      _cachedUrl = 'http://localhost:8000/api';
-    } else if (Platform.isAndroid) {
-      _cachedUrl = 'http://192.168.43.33:8000/api';
-    } else if (Platform.isIOS) {
-      _cachedUrl = 'http://192.168.43.33:8000/api';
-    } else {
-      _cachedUrl = 'http://localhost:8000/api';
-    }
-
+    _cachedUrl = 'https://nuru-bmoni.up.railway.app/api';
     return _cachedUrl!;
   }
 
