@@ -76,9 +76,14 @@ class DashboardView(APIView):
                 'ai_insight': ai_insight,
             })
         except Exception as main_err:
-            logger.error(f"DashboardView fatal error: {main_err}")
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"DashboardView fatal error: {main_err}\n{tb}")
             return Response(
-                {'error': str(main_err)},
+                {
+                    'error': str(main_err),
+                    'traceback': tb,
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
