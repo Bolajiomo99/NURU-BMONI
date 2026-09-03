@@ -34,7 +34,7 @@ def seed_demo_data():
     transactions = [
         # Income — this month (anchored from month start)
         {
-            'description': 'Freelance payment — Upwork',
+            'description': 'Freelance payment - Upwork',
             'amount': Decimal('500.00'),
             'currency': 'USD',
             'transaction_type': 'credit',
@@ -42,7 +42,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=6),
         },
         {
-            'description': 'Freelance payment — Fiverr',
+            'description': 'Freelance payment - Fiverr',
             'amount': Decimal('300.00'),
             'currency': 'USD',
             'transaction_type': 'credit',
@@ -50,7 +50,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=12),
         },
         {
-            'description': 'Salary — Digital Agency',
+            'description': 'Salary - Digital Agency',
             'amount': Decimal('620.00'),
             'currency': 'USD',
             'transaction_type': 'credit',
@@ -58,7 +58,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=3),
         },
         {
-            'description': 'Local client payment — Logo design',
+            'description': 'Local client payment - Logo design',
             'amount': Decimal('200000.00'),
             'currency': 'NGN',
             'transaction_type': 'credit',
@@ -84,7 +84,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=30),
         },
         {
-            'description': 'AWS hosting — production server',
+            'description': 'AWS hosting - production server',
             'amount': Decimal('23.50'),
             'currency': 'USD',
             'transaction_type': 'debit',
@@ -108,7 +108,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=48),
         },
         {
-            'description': 'Domain renewal — GoDaddy',
+            'description': 'Domain renewal - GoDaddy',
             'amount': Decimal('14.99'),
             'currency': 'USD',
             'transaction_type': 'debit',
@@ -118,7 +118,7 @@ def seed_demo_data():
 
         # Spending NGN — this month
         {
-            'description': 'Uber rides — weekly',
+            'description': 'Uber rides - weekly',
             'amount': Decimal('15000.00'),
             'currency': 'NGN',
             'transaction_type': 'debit',
@@ -126,7 +126,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=52),
         },
         {
-            'description': 'Food & groceries — Shoprite',
+            'description': 'Food & groceries - Shoprite',
             'amount': Decimal('25000.00'),
             'currency': 'NGN',
             'transaction_type': 'debit',
@@ -134,7 +134,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=54),
         },
         {
-            'description': 'Internet bill — Spectranet',
+            'description': 'Internet bill - Spectranet',
             'amount': Decimal('12000.00'),
             'currency': 'NGN',
             'transaction_type': 'debit',
@@ -142,7 +142,7 @@ def seed_demo_data():
             'timestamp': month_start + timedelta(hours=56),
         },
         {
-            'description': 'Electricity — IKEDC prepaid',
+            'description': 'Electricity - IKEDC prepaid',
             'amount': Decimal('8000.00'),
             'currency': 'NGN',
             'transaction_type': 'debit',
@@ -152,7 +152,7 @@ def seed_demo_data():
 
         # ── Last month income (for trend comparison) ──────────────
         {
-            'description': 'Freelance payment — Toptal',
+            'description': 'Freelance payment - Toptal',
             'amount': Decimal('400.00'),
             'currency': 'USD',
             'transaction_type': 'credit',
@@ -160,7 +160,7 @@ def seed_demo_data():
             'timestamp': month_start - timedelta(days=5),
         },
         {
-            'description': 'Salary — Digital Agency',
+            'description': 'Salary - Digital Agency',
             'amount': Decimal('620.00'),
             'currency': 'USD',
             'transaction_type': 'credit',
@@ -168,7 +168,7 @@ def seed_demo_data():
             'timestamp': month_start - timedelta(days=15),
         },
         {
-            'description': 'Freelance payment — direct client',
+            'description': 'Freelance payment - direct client',
             'amount': Decimal('180.00'),
             'currency': 'USD',
             'transaction_type': 'credit',
