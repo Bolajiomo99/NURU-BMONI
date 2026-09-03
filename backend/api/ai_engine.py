@@ -18,7 +18,27 @@ def _get_client():
     api_key = getattr(settings, 'GEMINI_API_KEY', '') or os.getenv('GEMINI_API_KEY', '')
     return genai.Client(api_key=api_key)
 
-MODEL_NAME = 'gemini-3.1-flash-lite'
+CANDIDATE_MODELS = [
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+]
+
+def _generate_content_with_fallback(client, contents, config=None):
+    """Generate content with model fallbacks if primary model experiences 503 spikes."""
+    last_err = None
+    for model_name in CANDIDATE_MODELS:
+        try:
+            return client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
+        except Exception as e:
+            logger.warning(f"Gemini model {model_name} failed: {e}. Attempting fallback...")
+            last_err = e
+    raise last_err
 
 SYSTEM_PROMPT = """You are NURU, an AI Financial Copilot built on top of BMONI.
 You help African freelancers, remote workers, and small business owners understand their money, make smarter decisions, and take action confidently.
@@ -97,8 +117,8 @@ def chat_with_nuru(user, message):
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
-            model=MODEL_NAME,
+        response = _generate_content_with_fallback(
+            client=client,
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
@@ -169,8 +189,8 @@ Keep the total response under 300 words but make every word count.
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
-            model=MODEL_NAME,
+        response = _generate_content_with_fallback(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
@@ -216,8 +236,8 @@ Respond with ONLY the insight text, nothing else."""
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
-            model=MODEL_NAME,
+        response = _generate_content_with_fallback(
+            client=client,
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.5,
