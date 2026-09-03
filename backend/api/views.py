@@ -24,10 +24,20 @@ logger = logging.getLogger(__name__)
 
 def _get_demo_user():
     """Get or create the demo user."""
-    user = UserProfile.objects.filter(email='bolaji@nuru.demo').first()
-    if not user:
-        user = seed_demo_data()
-    return user
+    try:
+        user = UserProfile.objects.filter(email='bolaji@nuru.demo').first()
+        if not user:
+            user = seed_demo_data()
+        return user
+    except Exception as e:
+        logger.error(f"Error fetching user, running migrations: {e}")
+        try:
+            from django.core.management import call_command
+            call_command('migrate', interactive=False)
+            return seed_demo_data()
+        except Exception as err:
+            logger.error(f"Migration fallback failed: {err}")
+            raise err
 
 
 class DashboardView(APIView):
@@ -38,29 +48,40 @@ class DashboardView(APIView):
     """
 
     def get(self, request):
-        user = _get_demo_user()
-        summary = get_financial_summary(user)
+        try:
+            user = _get_demo_user()
+            summary = get_financial_summary(user)
 
-        # Get AI insight (one-liner for dashboard)
-        ai_insight = get_ai_insight(user)
+            try:
+                ai_insight = get_ai_insight(user)
+            except Exception as e:
+                logger.error(f"AI insight failed: {e}")
+                ai_insight = "Your financial health is stable. Keep spending within safe weekly thresholds."
 
-        return Response({
-            'user': {
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'bmoni_user_id': user.bmoni_user_id,
-            },
-            'health_score': summary['health_score'],
-            'health_status': summary['health_status'],
-            'balances': summary['balances'],
-            'this_month': summary['this_month'],
-            'trends': summary['trends'],
-            'categories': summary['categories'],
-            'safe_weekly_spend_usd': summary['safe_weekly_spend_usd'],
-            'currency_concentration': summary['currency_concentration'],
-            'recent_transactions': summary['recent_transactions'],
-            'ai_insight': ai_insight,
-        })
+            return Response({
+                'user': {
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'bmoni_user_id': user.bmoni_user_id,
+                },
+                'health_score': summary['health_score'],
+                'health_status': summary['health_status'],
+                'balances': summary['balances'],
+                'this_month': summary['this_month'],
+                'trends': summary['trends'],
+                'categories': summary['categories'],
+                'safe_weekly_spend_usd': summary['safe_weekly_spend_usd'],
+                'currency_concentration': summary['currency_concentration'],
+                'recent_transactions': summary['recent_transactions'],
+                'ai_insight': ai_insight,
+            })
+        except Exception as main_err:
+            logger.error(f"DashboardView fatal error: {main_err}")
+            return Response(
+                {'error': str(main_err)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 
 class ChatView(APIView):
