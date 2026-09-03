@@ -23,6 +23,12 @@ nuru_app/ios/.symlinks/
 nuru_app/ios/Flutter/Flutter.framework
 nuru_app/ios/Flutter/Flutter.podspec
 
+# Desktop & Web desktop targets
+nuru_app/linux/
+nuru_app/macos/
+nuru_app/web/
+nuru_app/windows/
+
 # System & IDE
 .DS_Store
 .vscode/

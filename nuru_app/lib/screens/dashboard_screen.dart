@@ -75,12 +75,27 @@ class DashboardScreen extends ConsumerWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () => ref.refresh(dashboardProvider),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: NuruTheme.primary,
-                  ),
-                  child: const Text('Retry'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => ref.invalidate(dashboardProvider),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: NuruTheme.primary,
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => _showServerSettingsDialog(context, ref),
+                      icon: const Icon(Icons.settings_ethernet, size: 18),
+                      label: const Text('Change IP'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: NuruTheme.primaryLight,
+                        side: const BorderSide(color: NuruTheme.primaryLight),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

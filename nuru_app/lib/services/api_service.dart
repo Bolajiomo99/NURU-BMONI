@@ -10,7 +10,17 @@ class ApiService {
   static const String _urlKey = 'nuru_backend_api_url';
   static String? _cachedUrl;
 
-  /// Get active API base URL (supports local Wi-Fi IP for physical Android/iOS devices)
+  /// Candidate URLs to test if primary fails
+  static List<String> get _candidateUrls {
+    return [
+      'http://192.168.43.33:8000/api',
+      'http://10.0.2.2:8000/api',
+      'http://localhost:8000/api',
+      'http://127.0.0.1:8000/api',
+    ];
+  }
+
+  /// Get active API base URL
   static Future<String> getBaseUrl() async {
     if (_cachedUrl != null && _cachedUrl!.isNotEmpty) {
       return _cachedUrl!;
@@ -24,11 +34,9 @@ class ApiService {
       return savedUrl;
     }
 
-    // Default fallbacks based on environment
     if (kIsWeb) {
       _cachedUrl = 'http://localhost:8000/api';
     } else if (Platform.isAndroid) {
-      // 192.168.43.33 is the host Wi-Fi IP for physical devices, 10.0.2.2 for emulator
       _cachedUrl = 'http://192.168.43.33:8000/api';
     } else if (Platform.isIOS) {
       _cachedUrl = 'http://192.168.43.33:8000/api';
@@ -39,7 +47,7 @@ class ApiService {
     return _cachedUrl!;
   }
 
-  /// Update backend URL for physical device testing over Wi-Fi
+  /// Update backend URL for physical device testing
   static Future<void> setBaseUrl(String newUrl) async {
     String formatted = newUrl.trim();
     if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
@@ -60,15 +68,33 @@ class ApiService {
         'Accept': 'application/json',
       };
 
+  /// Helper to execute GET with auto-fallback to alternate URLs if connection fails
+  static Future<http.Response> _getWithFallback(String path) async {
+    final primary = await getBaseUrl();
+    try {
+      final res = await http.get(Uri.parse('$primary$path'), headers: _headers).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) return res;
+    } catch (_) {}
+
+    // Fallback search across candidate URLs
+    for (final candidate in _candidateUrls) {
+      if (candidate == primary) continue;
+      try {
+        final res = await http.get(Uri.parse('$candidate$path'), headers: _headers).timeout(const Duration(seconds: 3));
+        if (res.statusCode == 200) {
+          await setBaseUrl(candidate);
+          return res;
+        }
+      } catch (_) {}
+    }
+
+    // Try primary one last time to surface exact error
+    return await http.get(Uri.parse('$primary$path'), headers: _headers).timeout(const Duration(seconds: 8));
+  }
+
   /// Fetch dashboard summary
   static Future<DashboardData> fetchDashboard() async {
-    final url = await getBaseUrl();
-    final response = await http
-        .get(
-          Uri.parse('$url/dashboard/'),
-          headers: _headers,
-        )
-        .timeout(const Duration(seconds: 12));
+    final response = await _getWithFallback('/dashboard/');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -99,13 +125,7 @@ class ApiService {
 
   /// Get chat history
   static Future<List<ChatMessageItem>> fetchChatHistory() async {
-    final url = await getBaseUrl();
-    final response = await http
-        .get(
-          Uri.parse('$url/chat/'),
-          headers: _headers,
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _getWithFallback('/chat/');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -127,13 +147,7 @@ class ApiService {
 
   /// Generate Explain My Money story
   static Future<Map<String, dynamic>> explainFinances() async {
-    final url = await getBaseUrl();
-    final response = await http
-        .get(
-          Uri.parse('$url/explain/'),
-          headers: _headers,
-        )
-        .timeout(const Duration(seconds: 20));
+    final response = await _getWithFallback('/explain/');
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
