@@ -68,9 +68,12 @@ class ApiService {
   static Future<http.Response> _getWithFallback(String path) async {
     final primary = await getBaseUrl();
     try {
+      // The dashboard calls Gemini synchronously, so warm responses land
+      // anywhere from ~2s to ~7s. A short timeout here sends a perfectly
+      // healthy backend into the LAN-candidate scan below.
       final res = await http
           .get(Uri.parse('$primary$path'), headers: _headers)
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 15));
       if (res.statusCode == 200) return res;
     } catch (_) {}
 

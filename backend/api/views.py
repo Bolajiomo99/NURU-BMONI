@@ -76,14 +76,10 @@ class DashboardView(APIView):
                 'ai_insight': ai_insight,
             })
         except Exception as main_err:
-            import traceback
-            tb = traceback.format_exc()
-            logger.error(f"DashboardView fatal error: {main_err}\n{tb}")
+            # Log the traceback server-side; never return it to the client.
+            logger.exception(f"DashboardView fatal error: {main_err}")
             return Response(
-                {
-                    'error': str(main_err),
-                    'traceback': tb,
-                },
+                {'error': 'Could not load dashboard data.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -279,7 +275,7 @@ class SwapActionView(APIView):
 
         Transaction.objects.create(
             user=user,
-            description=f'Currency conversion — {data["from_currency"]} to {data["to_currency"]}',
+            description=f'Currency conversion - {data["from_currency"]} to {data["to_currency"]}',
             amount=data['amount'],
             currency='USD' if data['from_currency'] in ('USD', 'USDB') else 'NGN',
             transaction_type='debit',
@@ -304,7 +300,7 @@ class SwapActionView(APIView):
 
         Transaction.objects.create(
             user=user,
-            description=f'Currency conversion — received {to_currency_display}',
+            description=f'Currency conversion - received {to_currency_display}',
             amount=converted,
             currency=to_currency_display,
             transaction_type='credit',

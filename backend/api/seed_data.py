@@ -206,5 +206,5 @@ def seed_demo_data():
     for txn_data in transactions:
         Transaction.objects.create(user=user, **txn_data)
 
-    print(f"✅ Seeded {len(transactions)} transactions for {user.first_name} {user.last_name}")
+    print(f"Seeded {len(transactions)} transactions for {user.first_name} {user.last_name}")
     return user
