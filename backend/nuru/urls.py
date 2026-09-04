@@ -10,6 +10,7 @@ def _find_web_dir():
     """Locate the Flutter web build directory, checking multiple candidate paths."""
     candidates = [
         getattr(settings, 'FLUTTER_WEB_DIR', None),
+        os.path.join(settings.BASE_DIR, 'web_build'),
         os.path.join(settings.BASE_DIR, '..', 'nuru_app', 'build', 'web'),
         os.path.join(settings.BASE_DIR, 'nuru_app', 'build', 'web'),
     ]
