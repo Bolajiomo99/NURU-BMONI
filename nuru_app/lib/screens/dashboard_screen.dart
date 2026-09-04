@@ -1596,8 +1596,10 @@ class _ErrorView extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: [
                 SizedBox(
                   height: 48,
@@ -1607,7 +1609,6 @@ class _ErrorView extends StatelessWidget {
                     label: const Text('Retry'),
                   ),
                 ),
-                const SizedBox(width: 8),
                 SizedBox(
                   height: 48,
                   child: OutlinedButton.icon(
@@ -1626,7 +1627,6 @@ class _ErrorView extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 SizedBox(
                   height: 48,
                   child: OutlinedButton.icon(

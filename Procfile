@@ -1,1 +1,1 @@
-web: ([ -d backend ] && cd backend || true) && python manage.py migrate && python manage.py collectstatic --noinput && gunicorn nuru.wsgi:application --bind 0.0.0.0:$PORT
+web: sh -c "if [ -d backend ]; then cd backend; fi && python manage.py migrate && python manage.py seed_data && python manage.py collectstatic --noinput && gunicorn nuru.wsgi:application --bind 0.0.0.0:\$PORT"
