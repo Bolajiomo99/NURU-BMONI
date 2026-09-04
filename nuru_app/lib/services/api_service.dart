@@ -66,20 +66,33 @@ class ApiService {
 
   /// Helper to execute GET with auto-fallback to alternate URLs if connection fails
   static Future<http.Response> _getWithFallback(String path) async {
-    final primary = await getBaseUrl();
+    const liveRailwayUrl = 'https://nuru-bmoni.up.railway.app/api';
+
+    // First try the live Railway production API
     try {
-      // The dashboard calls Gemini synchronously, so warm responses land
-      // anywhere from ~2s to ~7s. A short timeout here sends a perfectly
-      // healthy backend into the LAN-candidate scan below.
       final res = await http
-          .get(Uri.parse('$primary$path'), headers: _headers)
-          .timeout(const Duration(seconds: 15));
-      if (res.statusCode == 200) return res;
+          .get(Uri.parse('$liveRailwayUrl$path'), headers: _headers)
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        _cachedUrl = liveRailwayUrl;
+        return res;
+      }
     } catch (_) {}
 
-    // Fallback search across candidate URLs
+    // Next try the stored or primary base URL
+    final primary = await getBaseUrl();
+    if (primary != liveRailwayUrl) {
+      try {
+        final res = await http
+            .get(Uri.parse('$primary$path'), headers: _headers)
+            .timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) return res;
+      } catch (_) {}
+    }
+
+    // Fallback search across remaining candidate URLs
     for (final candidate in _candidateUrls) {
-      if (candidate == primary) continue;
+      if (candidate == primary || candidate == liveRailwayUrl) continue;
       try {
         final res = await http
             .get(Uri.parse('$candidate$path'), headers: _headers)
@@ -91,9 +104,9 @@ class ApiService {
       } catch (_) {}
     }
 
-    // Try primary one last time to surface exact error
+    // Try live Railway URL one last time to surface error
     return await http
-        .get(Uri.parse('$primary$path'), headers: _headers)
+        .get(Uri.parse('$liveRailwayUrl$path'), headers: _headers)
         .timeout(const Duration(seconds: 8));
   }
 
