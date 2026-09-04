@@ -287,12 +287,15 @@ class ApiService {
     }
   }
 
-  /// Connect / Log in existing BMONI User ID to load real live balances
+  /// Connect / Log in existing BMONI user using Phone Number, Email, Name, or BMONI User ID
   static Future<Map<String, dynamic>> loginBmoniUser({
+    String? identifier,
     String? bmoniUserId,
     String? phoneNumber,
   }) async {
+    final input = identifier ?? bmoniUserId ?? phoneNumber ?? '';
     final response = await _postWithFallback('/bmoni/login/', {
+      'identifier': input,
       'bmoni_user_id': bmoniUserId ?? '',
       'phone_number': phoneNumber ?? '',
     });
@@ -308,10 +311,10 @@ class ApiService {
     } else if (response.statusCode == 404) {
       throw BmoniAccountNotFoundException(
         json['message'] as String? ??
-            'No BMONI account found for that BMONI User ID or phone number.',
+            'No BMONI account found for that phone number, email, or identifier.',
       );
     } else {
-      throw Exception('BMONI Login failed: ${response.body}');
+      throw Exception('BMONI Login failed: ${json["message"] ?? response.body}');
     }
   }
 }

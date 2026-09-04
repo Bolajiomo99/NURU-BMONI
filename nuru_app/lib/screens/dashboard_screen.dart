@@ -456,20 +456,9 @@ class DashboardScreen extends ConsumerWidget {
                     controller: bmoniIdCtrl,
                     style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
                     decoration: const InputDecoration(
-                      labelText: 'BMONI User ID (UUID)',
-                      hintText: 'e.g. 0936ed6e-eea7-41be-8a14-6921666cc086',
-                      prefixIcon: Icon(Icons.key_rounded, color: NuruTheme.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Registered Phone Number',
-                      hintText: '+2348123456789',
-                      prefixIcon: Icon(Icons.phone_outlined, color: NuruTheme.textMuted),
+                      labelText: 'Phone Number, Email, or Account Name',
+                      hintText: 'e.g. 08071334123, ada.123@example.com, or Bolaji',
+                      prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -484,8 +473,9 @@ class DashboardScreen extends ConsumerWidget {
                               setState(() => isLoading = true);
                               try {
                                 final res = await ApiService.loginBmoniUser(
-                                  bmoniUserId: bmoniIdCtrl.text.trim(),
-                                  phoneNumber: phoneCtrl.text.trim(),
+                                  identifier: bmoniIdCtrl.text.trim().isNotEmpty 
+                                      ? bmoniIdCtrl.text.trim() 
+                                      : phoneCtrl.text.trim(),
                                 );
                                 if (context.mounted) {
                                   Navigator.pop(context);
