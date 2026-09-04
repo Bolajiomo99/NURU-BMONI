@@ -106,7 +106,12 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
           amount: amount,
           currency: currency,
           toAddress: toAddr,
-          description: 'Family support transfer',
+          accountNumber: action?.accountNumber ?? '',
+          bankName: action?.bankName ?? '',
+          accountName: action?.accountName ?? '',
+          description: (action?.description ?? '').isNotEmpty
+              ? action!.description
+              : 'Real Money Transfer via NURU',
         );
         _updatedBalanceText =
             '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';

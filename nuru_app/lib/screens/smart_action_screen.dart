@@ -140,6 +140,60 @@ class SmartActionScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 20),
 
+                  // ─── Recipient Account Details ──────────
+                  if (isTransfer) ...[
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: NuruTheme.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: NuruTheme.divider),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.account_balance_rounded, size: 18, color: NuruTheme.primary),
+                              SizedBox(width: 8),
+                              Text(
+                                'Recipient Account Details',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: NuruTheme.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          _ImpactRow(
+                            label: 'Account Name',
+                            value: action.accountName.isNotEmpty ? action.accountName : (action.to.isNotEmpty ? action.to : 'Beneficiary'),
+                            color: NuruTheme.textPrimary,
+                          ),
+                          if (action.bankName.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _ImpactRow(
+                              label: 'Bank Name',
+                              value: action.bankName,
+                              color: NuruTheme.textPrimary,
+                            ),
+                          ],
+                          if (action.accountNumber.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _ImpactRow(
+                              label: 'Account Number',
+                              value: action.accountNumber,
+                              color: NuruTheme.primaryLight,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // ─── Financial Impact ─────
                   Container(
                     padding: const EdgeInsets.all(20),

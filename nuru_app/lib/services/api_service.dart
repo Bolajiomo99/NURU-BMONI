@@ -23,13 +23,21 @@ class ApiService {
 
   /// Candidate URLs to test if primary fails
   static List<String> get _candidateUrls {
-    return [
+    final list = <String>[];
+    if (kIsWeb) {
+      final webOrigin = Uri.base.origin;
+      if (webOrigin.isNotEmpty && webOrigin != 'null') {
+        list.add('$webOrigin/api');
+      }
+    }
+    list.addAll([
       'https://nuru-bmoni.up.railway.app/api',
-      'http://192.168.43.33:8000/api',
-      'http://10.0.2.2:8000/api',
       'http://localhost:8000/api',
       'http://127.0.0.1:8000/api',
-    ];
+      'http://10.0.2.2:8000/api',
+      'http://192.168.43.33:8000/api',
+    ]);
+    return list.toSet().toList();
   }
 
   /// Get active API base URL
@@ -46,6 +54,14 @@ class ApiService {
       return savedUrl;
     }
 
+    if (kIsWeb) {
+      final webOrigin = Uri.base.origin;
+      if (webOrigin.isNotEmpty && webOrigin != 'null') {
+        _cachedUrl = '$webOrigin/api';
+        return _cachedUrl!;
+      }
+    }
+
     _cachedUrl = 'https://nuru-bmoni.up.railway.app/api';
     return _cachedUrl!;
   }
@@ -53,8 +69,6 @@ class ApiService {
   /// Update backend URL for physical device testing
   static Future<void> setBaseUrl(String newUrl) async {
     String formatted = newUrl.trim();
-    // Strip any trailing slash before normalising, so ".../api/" does not
-    // become ".../api/api".
     if (formatted.endsWith('/')) {
       formatted = formatted.substring(0, formatted.length - 1);
     }
@@ -102,92 +116,50 @@ class ApiService {
 
   /// Helper to execute GET with auto-fallback to alternate URLs if connection fails
   static Future<http.Response> _getWithFallback(String path) async {
-    const liveRailwayUrl = 'https://nuru-bmoni.up.railway.app/api';
-
-    // First try the live Railway production API
-    try {
-      final res = await http
-          .get(Uri.parse('$liveRailwayUrl$path'), headers: await _headers)
-          .timeout(const Duration(seconds: 12));
-      if (res.statusCode == 200) {
-        _cachedUrl = liveRailwayUrl;
-        return res;
-      }
-    } catch (_) {}
-
-    // Next try the stored or primary base URL
     final primary = await getBaseUrl();
-    if (primary != liveRailwayUrl) {
-      try {
-        final res = await http
-            .get(Uri.parse('$primary$path'), headers: await _headers)
-            .timeout(const Duration(seconds: 4));
-        if (res.statusCode == 200) return res;
-      } catch (_) {}
-    }
+    final urls = {primary, ..._candidateUrls}.toList();
 
-    // Fallback search across remaining candidate URLs
-    for (final candidate in _candidateUrls) {
-      if (candidate == primary || candidate == liveRailwayUrl) continue;
+    Object? lastException;
+    for (final base in urls) {
       try {
         final res = await http
-            .get(Uri.parse('$candidate$path'), headers: await _headers)
-            .timeout(const Duration(seconds: 3));
+            .get(Uri.parse('$base$path'), headers: await _headers)
+            .timeout(const Duration(seconds: 10));
         if (res.statusCode == 200) {
-          await setBaseUrl(candidate);
+          _cachedUrl = base;
           return res;
         }
-      } catch (_) {}
+      } catch (e) {
+        lastException = e;
+      }
     }
-
-    // Try live Railway URL one last time to surface error
-    return await http
-        .get(Uri.parse('$liveRailwayUrl$path'), headers: await _headers)
-        .timeout(const Duration(seconds: 8));
+    throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
   }
 
   /// Helper to execute POST with auto-fallback to alternate URLs if connection fails
   static Future<http.Response> _postWithFallback(String path, Map<String, dynamic> body) async {
-    const liveRailwayUrl = 'https://nuru-bmoni.up.railway.app/api';
-
-    // First try live Railway production API
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$liveRailwayUrl$path'),
-            headers: await _headers,
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 25));
-      if (res.statusCode == 200) {
-        _cachedUrl = liveRailwayUrl;
-        return res;
-      }
-    } catch (_) {}
-
-    // Next try stored base URL
     final primary = await getBaseUrl();
-    if (primary != liveRailwayUrl) {
+    final urls = {primary, ..._candidateUrls}.toList();
+
+    Object? lastException;
+    for (final base in urls) {
       try {
         final res = await http
             .post(
-              Uri.parse('$primary$path'),
+              Uri.parse('$base$path'),
               headers: await _headers,
               body: jsonEncode(body),
             )
-            .timeout(const Duration(seconds: 15));
-        if (res.statusCode == 200) return res;
-      } catch (_) {}
+            .timeout(const Duration(seconds: 12));
+        if (res.statusCode == 200) {
+          _cachedUrl = base;
+          return res;
+        }
+      } catch (e) {
+        lastException = e;
+      }
     }
-
-    // Try live Railway URL one last time
-    return await http
-        .post(
-          Uri.parse('$liveRailwayUrl$path'),
-          headers: await _headers,
-          body: jsonEncode(body),
-        )
-        .timeout(const Duration(seconds: 25));
+    throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
   }
 
   /// Fetch dashboard summary
@@ -249,21 +221,20 @@ class ApiService {
     required double amount,
     required String currency,
     required String toAddress,
+    String accountNumber = '',
+    String bankName = '',
+    String accountName = '',
     String description = '',
   }) async {
-    final url = await getBaseUrl();
-    final response = await http
-        .post(
-          Uri.parse('$url/action/transfer/'),
-          headers: await _headers,
-          body: jsonEncode({
-            'amount': amount,
-            'currency': currency,
-            'to_address': toAddress,
-            'description': description,
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
+    final response = await _postWithFallback('/action/transfer/', {
+      'amount': amount,
+      'currency': currency,
+      'to_address': toAddress,
+      'account_number': accountNumber,
+      'bank_name': bankName,
+      'account_name': accountName,
+      'description': description,
+    });
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -278,18 +249,11 @@ class ApiService {
     required String fromCurrency,
     required String toCurrency,
   }) async {
-    final url = await getBaseUrl();
-    final response = await http
-        .post(
-          Uri.parse('$url/action/swap/'),
-          headers: await _headers,
-          body: jsonEncode({
-            'amount': amount,
-            'from_currency': fromCurrency,
-            'to_currency': toCurrency,
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
+    final response = await _postWithFallback('/action/swap/', {
+      'amount': amount,
+      'from_currency': fromCurrency,
+      'to_currency': toCurrency,
+    });
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

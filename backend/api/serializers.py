@@ -34,8 +34,11 @@ class ChatInputSerializer(serializers.Serializer):
 
 class TransferActionSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=15, decimal_places=2)
-    currency = serializers.CharField(max_length=10, default='CNGN')
-    to_address = serializers.CharField(max_length=255)
+    currency = serializers.CharField(max_length=10, default='NGN')
+    to_address = serializers.CharField(max_length=255, required=False, default='')
+    account_number = serializers.CharField(max_length=50, required=False, default='')
+    bank_name = serializers.CharField(max_length=100, required=False, default='')
+    account_name = serializers.CharField(max_length=150, required=False, default='')
     description = serializers.CharField(max_length=500, required=False, default='')
 
 
