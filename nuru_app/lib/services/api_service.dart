@@ -110,6 +110,50 @@ class ApiService {
         .timeout(const Duration(seconds: 8));
   }
 
+  /// Helper to execute POST with auto-fallback to alternate URLs if connection fails
+  static Future<http.Response> _postWithFallback(String path, Map<String, dynamic> body) async {
+    const liveRailwayUrl = 'https://nuru-bmoni.up.railway.app/api';
+
+    // First try live Railway production API
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$liveRailwayUrl$path'),
+            headers: _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (res.statusCode == 200) {
+        _cachedUrl = liveRailwayUrl;
+        return res;
+      }
+    } catch (_) {}
+
+    // Next try stored base URL
+    final primary = await getBaseUrl();
+    if (primary != liveRailwayUrl) {
+      try {
+        final res = await http
+            .post(
+              Uri.parse('$primary$path'),
+              headers: _headers,
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 15));
+        if (res.statusCode == 200) return res;
+      } catch (_) {}
+    }
+
+    // Try live Railway URL one last time
+    return await http
+        .post(
+          Uri.parse('$liveRailwayUrl$path'),
+          headers: _headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 25));
+  }
+
   /// Fetch dashboard summary
   static Future<DashboardData> fetchDashboard() async {
     final response = await _getWithFallback('/dashboard/');
@@ -124,14 +168,7 @@ class ApiService {
 
   /// Send message to NURU AI
   static Future<ChatMessageItem> sendMessage(String message) async {
-    final url = await getBaseUrl();
-    final response = await http
-        .post(
-          Uri.parse('$url/chat/'),
-          headers: _headers,
-          body: jsonEncode({'message': message}),
-        )
-        .timeout(const Duration(seconds: 20));
+    final response = await _postWithFallback('/chat/', {'message': message});
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -233,20 +270,13 @@ class ApiService {
     required String phoneNumber,
     required String bvn,
   }) async {
-    final url = await getBaseUrl();
-    final response = await http
-        .post(
-          Uri.parse('$url/bmoni/user/'),
-          headers: _headers,
-          body: jsonEncode({
-            'first_name': firstName,
-            'last_name': lastName,
-            'email': email,
-            'phone_number': phoneNumber,
-            'bvn': bvn,
-          }),
-        )
-        .timeout(const Duration(seconds: 20));
+    final response = await _postWithFallback('/bmoni/user/', {
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'phone_number': phoneNumber,
+      'bvn': bvn,
+    });
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -260,17 +290,10 @@ class ApiService {
     String? bmoniUserId,
     String? phoneNumber,
   }) async {
-    final url = await getBaseUrl();
-    final response = await http
-        .post(
-          Uri.parse('$url/bmoni/login/'),
-          headers: _headers,
-          body: jsonEncode({
-            'bmoni_user_id': bmoniUserId ?? '',
-            'phone_number': phoneNumber ?? '',
-          }),
-        )
-        .timeout(const Duration(seconds: 20));
+    final response = await _postWithFallback('/bmoni/login/', {
+      'bmoni_user_id': bmoniUserId ?? '',
+      'phone_number': phoneNumber ?? '',
+    });
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

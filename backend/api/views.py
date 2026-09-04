@@ -440,7 +440,7 @@ class TransactionsView(APIView):
 class BmoniLoginView(APIView):
     """
     POST /api/bmoni/login/
-    Connect/Log in with an existing BMONI User ID to view real live balances.
+    Connect/Log in with an existing BMONI User ID to view real live data & balances.
     """
 
     def post(self, request):
@@ -453,28 +453,39 @@ class BmoniLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        target_id = bmoni_user_id or f"bmoni-{phone_number.replace('+', '')}"
-
         client = BmoniClient()
         user = _get_demo_user()
 
-        # Query live BMONI API
-        status_res = client.get_onboarding_status(target_id)
-        balance_res = client.get_balances(target_id)
+        target_id = bmoni_user_id or f"bmoni-{phone_number.replace('+', '')}"
 
-        user.bmoni_user_id = target_id
-        if phone_number:
-            user.phone_number = phone_number
-        if status_res.get('success'):
-            user.onboarding_complete = True
+        # Fetch real BMONI user profile details
+        user_detail_res = client.get_user(target_id)
+        if user_detail_res.get('success') and user_detail_res.get('data'):
+            u_data = user_detail_res['data']
+            user.first_name = u_data.get('firstName') or user.first_name
+            user.last_name = u_data.get('lastName') or user.last_name
+            user.email = u_data.get('email') or user.email
+            user.phone_number = u_data.get('phoneNumber') or user.phone_number
+            user.bmoni_user_id = u_data.get('bmoniUserId') or target_id
+        else:
+            user.bmoni_user_id = target_id
+            if phone_number:
+                user.phone_number = phone_number
+
+        user.onboarding_complete = True
         user.save()
+
+        # Query live BMONI status and balances
+        status_res = client.get_onboarding_status(user.bmoni_user_id)
+        balance_res = client.get_balances(user.bmoni_user_id)
 
         summary = get_financial_summary(user)
 
         return Response({
             'status': 'success',
-            'message': f'Logged in as BMONI user {target_id}',
+            'message': f'Logged in as BMONI user {user.bmoni_user_id}',
             'user': UserProfileSerializer(user).data,
+            'bmoni_user_detail': user_detail_res.get('data'),
             'bmoni_balances': balance_res.get('data'),
             'bmoni_status': status_res.get('data'),
             'dashboard': summary,
