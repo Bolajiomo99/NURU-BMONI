@@ -10,6 +10,7 @@ from .views import (
     SwapActionView,
     BmoniUserView,
     BmoniBalancesView,
+    BmoniLoginView,
     SeedDataView,
     TransactionsView,
 )
@@ -28,6 +29,7 @@ urlpatterns = [
 
     # BMONI proxy endpoints
     path('bmoni/user/', BmoniUserView.as_view(), name='bmoni-user'),
+    path('bmoni/login/', BmoniLoginView.as_view(), name='bmoni-login'),
     path('bmoni/balances/', BmoniBalancesView.as_view(), name='bmoni-balances'),
 
     # Admin / Demo

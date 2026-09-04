@@ -241,4 +241,28 @@ class ApiService {
       throw Exception('BMONI Registration failed: ${response.body}');
     }
   }
+
+  /// Connect / Log in existing BMONI User ID to load real live balances
+  static Future<Map<String, dynamic>> loginBmoniUser({
+    String? bmoniUserId,
+    String? phoneNumber,
+  }) async {
+    final url = await getBaseUrl();
+    final response = await http
+        .post(
+          Uri.parse('$url/bmoni/login/'),
+          headers: _headers,
+          body: jsonEncode({
+            'bmoni_user_id': bmoniUserId ?? '',
+            'phone_number': phoneNumber ?? '',
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('BMONI Login failed: ${response.body}');
+    }
+  }
 }

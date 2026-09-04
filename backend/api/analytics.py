@@ -265,7 +265,35 @@ def _total_spending_usd(queryset):
 
 
 def _get_balances_from_transactions(user):
-    """Calculate running balances from transaction history."""
+    """Calculate running balances or fetch live BMONI balances if connected."""
+    if user.bmoni_user_id and user.bmoni_user_id != 'demo-user-001' and not user.bmoni_user_id.startswith('bmoni-0'):
+        try:
+            from .bmoni_client import BmoniClient
+            client = BmoniClient()
+            res = client.get_balances(user.bmoni_user_id)
+            if res.get('success') and res.get('data'):
+                data = res['data']
+                usd_bal = Decimal('0')
+                ngn_bal = Decimal('0')
+                if isinstance(data, list):
+                    for item in data:
+                        curr = str(item.get('currency', '')).upper()
+                        amt = Decimal(str(item.get('amount', 0)))
+                        if curr in ['USD', 'USDC']:
+                            usd_bal += amt
+                        elif curr in ['NGN', 'CNGN']:
+                            ngn_bal += amt
+                    if usd_bal > 0 or ngn_bal > 0:
+                        return (usd_bal, ngn_bal)
+                elif isinstance(data, dict):
+                    usd_bal = Decimal(str(data.get('usd', data.get('USD', 0))))
+                    ngn_bal = Decimal(str(data.get('ngn', data.get('NGN', 0))))
+                    if usd_bal > 0 or ngn_bal > 0:
+                        return (usd_bal, ngn_bal)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error fetching live BMONI balances: {e}")
+
     credits_usd = _sum_by(user.transactions.all(), 'credit', 'USD')
     debits_usd = _sum_by(user.transactions.all(), 'debit', 'USD')
     credits_ngn = _sum_by(user.transactions.all(), 'credit', 'NGN')

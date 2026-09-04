@@ -435,3 +435,47 @@ class TransactionsView(APIView):
         transactions = user.transactions.all()
         serializer = TransactionSerializer(transactions, many=True)
         return Response({'transactions': serializer.data})
+
+
+class BmoniLoginView(APIView):
+    """
+    POST /api/bmoni/login/
+    Connect/Log in with an existing BMONI User ID to view real live balances.
+    """
+
+    def post(self, request):
+        bmoni_user_id = request.data.get('bmoni_user_id', '').strip()
+        phone_number = request.data.get('phone_number', '').strip()
+
+        if not bmoni_user_id and not phone_number:
+            return Response(
+                {'error': 'Please enter a valid BMONI User ID or phone number.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_id = bmoni_user_id or f"bmoni-{phone_number.replace('+', '')}"
+
+        client = BmoniClient()
+        user = _get_demo_user()
+
+        # Query live BMONI API
+        status_res = client.get_onboarding_status(target_id)
+        balance_res = client.get_balances(target_id)
+
+        user.bmoni_user_id = target_id
+        if phone_number:
+            user.phone_number = phone_number
+        if status_res.get('success'):
+            user.onboarding_complete = True
+        user.save()
+
+        summary = get_financial_summary(user)
+
+        return Response({
+            'status': 'success',
+            'message': f'Logged in as BMONI user {target_id}',
+            'user': UserProfileSerializer(user).data,
+            'bmoni_balances': balance_res.get('data'),
+            'bmoni_status': status_res.get('data'),
+            'dashboard': summary,
+        })

@@ -197,6 +197,8 @@ class DashboardScreen extends ConsumerWidget {
     final emailCtrl = TextEditingController(text: user.email.isNotEmpty ? user.email : 'bolajijimoh8@gmail.com');
     final phoneCtrl = TextEditingController(text: user.phoneNumber.isNotEmpty ? user.phoneNumber : '+2348123456789');
     final bvnCtrl = TextEditingController(text: '22223333444');
+    final bmoniIdCtrl = TextEditingController(text: user.bmoniUserId.isNotEmpty ? user.bmoniUserId : '');
+    int activeTab = 0; // 0: Register, 1: Existing User Login
     bool isLoading = false;
 
     showModalBottomSheet(
@@ -248,7 +250,7 @@ class DashboardScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'BMONI Sign Up & BVN',
+                            'BMONI Account & BVN',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -256,7 +258,7 @@ class DashboardScreen extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            'Connect phone & verify BVN with live BMONI sandbox',
+                            'Register new user or log in with live BMONI ID',
                             style: TextStyle(
                               fontSize: 12,
                               color: NuruTheme.textMuted,
@@ -267,130 +269,279 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: firstNameCtrl,
-                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                  decoration: const InputDecoration(
-                    labelText: 'First Name',
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
+                const SizedBox(height: 16),
+                // Segmented tab toggle
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: NuruTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: lastNameCtrl,
-                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                  decoration: const InputDecoration(
-                    labelText: 'Last Name',
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: phoneCtrl,
-                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone Number',
-                    hintText: '+2348123456789',
-                    prefixIcon: Icon(Icons.phone_outlined, color: NuruTheme.textMuted),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: emailCtrl,
-                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email Address',
-                    prefixIcon: Icon(Icons.email_outlined, color: NuruTheme.textMuted),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: bvnCtrl,
-                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                  keyboardType: TextInputType.number,
-                  maxLength: 11,
-                  decoration: const InputDecoration(
-                    labelText: 'Bank Verification Number (BVN)',
-                    hintText: '11-digit BVN',
-                    prefixIcon: Icon(Icons.badge_outlined, color: NuruTheme.textMuted),
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () async {
-                            HapticFeedback.mediumImpact();
-                            setState(() => isLoading = true);
-                            try {
-                              await ApiService.registerBmoniUser(
-                                firstName: firstNameCtrl.text.trim(),
-                                lastName: lastNameCtrl.text.trim(),
-                                email: emailCtrl.text.trim(),
-                                phoneNumber: phoneCtrl.text.trim(),
-                                bvn: bvnCtrl.text.trim(),
-                              );
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                ref.invalidate(dashboardProvider);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Row(
-                                      children: [
-                                        Icon(Icons.check_circle_rounded, color: Colors.white),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            'BMONI Account Connected & BVN Verified!',
-                                            style: TextStyle(fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    backgroundColor: NuruTheme.healthyGreen,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              setState(() => isLoading = false);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Onboarding failed: $e'),
-                                    backgroundColor: NuruTheme.dangerRed,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.black,
-                              strokeWidth: 2.5,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => activeTab = 0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: activeTab == 0 ? NuruTheme.surfaceElevated : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.verified_user_rounded, size: 20),
-                              SizedBox(width: 8),
-                              Text('Register & Verify BVN'),
-                            ],
+                            child: Center(
+                              child: Text(
+                                'New Signup',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: activeTab == 0 ? NuruTheme.textPrimary : NuruTheme.textMuted,
+                                ),
+                              ),
+                            ),
                           ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => activeTab = 1),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: activeTab == 1 ? NuruTheme.surfaceElevated : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Existing BMONI ID',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: activeTab == 1 ? NuruTheme.textPrimary : NuruTheme.textMuted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 20),
+                if (activeTab == 0) ...[
+                  TextField(
+                    controller: firstNameCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    decoration: const InputDecoration(
+                      labelText: 'First Name',
+                      prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: lastNameCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    decoration: const InputDecoration(
+                      labelText: 'Last Name',
+                      prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      hintText: '+2348123456789',
+                      prefixIcon: Icon(Icons.phone_outlined, color: NuruTheme.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address',
+                      prefixIcon: Icon(Icons.email_outlined, color: NuruTheme.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: bvnCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    keyboardType: TextInputType.number,
+                    maxLength: 11,
+                    decoration: const InputDecoration(
+                      labelText: 'Bank Verification Number (BVN)',
+                      hintText: '11-digit BVN',
+                      prefixIcon: Icon(Icons.badge_outlined, color: NuruTheme.textMuted),
+                      counterText: '',
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              HapticFeedback.mediumImpact();
+                              setState(() => isLoading = true);
+                              try {
+                                await ApiService.registerBmoniUser(
+                                  firstName: firstNameCtrl.text.trim(),
+                                  lastName: lastNameCtrl.text.trim(),
+                                  email: emailCtrl.text.trim(),
+                                  phoneNumber: phoneCtrl.text.trim(),
+                                  bvn: bvnCtrl.text.trim(),
+                                );
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ref.invalidate(dashboardProvider);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Row(
+                                        children: [
+                                          Icon(Icons.check_circle_rounded, color: Colors.white),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'BMONI Account Connected & BVN Verified!',
+                                              style: TextStyle(fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: NuruTheme.healthyGreen,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setState(() => isLoading = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Onboarding failed: $e'),
+                                      backgroundColor: NuruTheme.dangerRed,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.black,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.verified_user_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text('Register & Verify BVN'),
+                              ],
+                            ),
+                    ),
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: bmoniIdCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    decoration: const InputDecoration(
+                      labelText: 'BMONI User ID (UUID)',
+                      hintText: 'e.g. 0936ed6e-eea7-41be-8a14-6921666cc086',
+                      prefixIcon: Icon(Icons.key_rounded, color: NuruTheme.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Registered Phone Number',
+                      hintText: '+2348123456789',
+                      prefixIcon: Icon(Icons.phone_outlined, color: NuruTheme.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              HapticFeedback.mediumImpact();
+                              setState(() => isLoading = true);
+                              try {
+                                final res = await ApiService.loginBmoniUser(
+                                  bmoniUserId: bmoniIdCtrl.text.trim(),
+                                  phoneNumber: phoneCtrl.text.trim(),
+                                );
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ref.invalidate(dashboardProvider);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.account_balance_wallet_rounded, color: Colors.white),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'Connected BMONI User (${res["user"]?["bmoni_user_id"] ?? "Active"})!',
+                                              style: const TextStyle(fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: NuruTheme.healthyGreen,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setState(() => isLoading = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Login failed: $e'),
+                                      backgroundColor: NuruTheme.dangerRed,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.black,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.login_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text('Log In & Load Live Balances'),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
