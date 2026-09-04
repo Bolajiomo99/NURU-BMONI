@@ -280,15 +280,22 @@ class ApiService {
       'bvn': bvn,
     });
 
+    Map<String, dynamic> jsonBody = {};
+    try {
+      if (response.body.trim().startsWith('{')) {
+        jsonBody = jsonDecode(response.body);
+      }
+    } catch (_) {}
+
     if (response.statusCode == 200) {
-      final json = jsonDecode(response.body);
-      final resolvedId = json['user']?['bmoni_user_id'] as String?;
+      final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
       if (resolvedId != null && resolvedId.isNotEmpty) {
         await _setCurrentUserId(resolvedId);
       }
-      return json;
+      return jsonBody;
     } else {
-      throw Exception('BMONI Registration failed: ${response.body}');
+      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Registration could not be completed. Please try again.';
+      throw Exception(msg);
     }
   }
 
@@ -305,21 +312,32 @@ class ApiService {
       'phone_number': phoneNumber ?? '',
     });
 
-    final json = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+    Map<String, dynamic> jsonBody = {};
+    try {
+      if (response.body.trim().startsWith('{')) {
+        jsonBody = jsonDecode(response.body);
+      }
+    } catch (_) {}
 
     if (response.statusCode == 200) {
-      final resolvedId = json['user']?['bmoni_user_id'] as String?;
+      final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
       if (resolvedId != null && resolvedId.isNotEmpty) {
         await _setCurrentUserId(resolvedId);
       }
-      return json;
+      return jsonBody;
     } else if (response.statusCode == 404) {
       throw BmoniAccountNotFoundException(
-        json['message'] as String? ??
+        jsonBody['message'] as String? ??
             'No BMONI account found for that phone number, email, or identifier.',
       );
     } else {
-      throw Exception('BMONI Login failed: ${json["message"] ?? response.body}');
+      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Login failed. Please try again.';
+      throw Exception(msg);
     }
+  }
+
+  /// Reset session context back to unauthenticated guest mode
+  static Future<void> logout() async {
+    await _setCurrentUserId('');
   }
 }

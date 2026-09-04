@@ -408,118 +408,136 @@ class BmoniUserView(APIView):
     """
 
     def post(self, request):
-        first_name = (request.data.get('first_name') or '').strip()
-        last_name = (request.data.get('last_name') or '').strip()
-        email = (request.data.get('email') or '').strip()
-        raw_phone = (request.data.get('phone_number') or '').strip()
-        bvn = (request.data.get('bvn') or '').strip()
-
-        if not raw_phone:
-            return Response(
-                {'error': 'Phone number is required for BMONI registration.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         try:
-            phone_number = normalize_phone_e164(raw_phone)
-        except InvalidPhoneNumberError:
-            phone_number = raw_phone if raw_phone.startswith('+') else f"+234{raw_phone.lstrip('0')}"
+            first_name = (request.data.get('first_name') or '').strip()
+            last_name = (request.data.get('last_name') or '').strip()
+            email = (request.data.get('email') or '').strip()
+            raw_phone = (request.data.get('phone_number') or '').strip()
+            bvn = (request.data.get('bvn') or '').strip()
 
-        # Persona matching rules per BMONI Sandbox documentation
-        if bvn == '95888168924':
-            first_name = first_name if first_name and first_name != 'User' else 'Bunch'
-            last_name = last_name if last_name and last_name != 'BMONI' else 'Dillon'
-            phone_number = '+2348000000000' if not raw_phone or raw_phone in ('08000000000', '+2348000000000') else phone_number
-            email = email or 'bunch.dillon@example.com'
-        elif bvn == '22222222222':
-            first_name = first_name if first_name and first_name != 'User' else 'Samson'
-            last_name = last_name if last_name and last_name != 'BMONI' else 'Jabo'
-            phone_number = '+2348000000001' if not raw_phone or raw_phone in ('08000000001', '+2348000000001') else phone_number
-            email = email or 'samson.jabo@example.com'
-        else:
-            if not first_name:
-                first_name = 'User'
-            if not last_name:
-                last_name = 'BMONI'
-            if not email:
-                email = f"user_{abs(hash(phone_number))}@bmoni-demo.com"
+            if not raw_phone:
+                return Response(
+                    {'status': 'error', 'message': 'Phone number is required for BMONI registration.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        client = BmoniClient()
+            try:
+                phone_number = normalize_phone_e164(raw_phone)
+            except InvalidPhoneNumberError:
+                phone_number = raw_phone if raw_phone.startswith('+') else f"+234{raw_phone.lstrip('0')}"
 
-        # Step 1: Create BMONI user
-        create_res = client.create_user(
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            phone_number=phone_number,
-        )
+            # Persona matching rules per BMONI Sandbox documentation
+            if bvn == '95888168924':
+                first_name = first_name if first_name and first_name != 'User' else 'Bunch'
+                last_name = last_name if last_name and last_name != 'BMONI' else 'Dillon'
+                phone_number = '+2348000000000' if not raw_phone or raw_phone in ('08000000000', '+2348000000000') else phone_number
+                email = email or 'bunch.dillon@example.com'
+            elif bvn == '22222222222':
+                first_name = first_name if first_name and first_name != 'User' else 'Samson'
+                last_name = last_name if last_name and last_name != 'BMONI' else 'Jabo'
+                phone_number = '+2348000000001' if not raw_phone or raw_phone in ('08000000001', '+2348000000001') else phone_number
+                email = email or 'samson.jabo@example.com'
+            else:
+                if not first_name:
+                    first_name = 'User'
+                if not last_name:
+                    last_name = 'BMONI'
+                if not email:
+                    email = f"user_{abs(hash(phone_number))}@bmoni-demo.com"
 
-        bmoni_user_id = None
-        if create_res.get('success'):
-            user_data = create_res['data'].get('user', {})
-            bmoni_user_id = user_data.get('bmoniUserId') or user_data.get('id') or create_res['data'].get('bmoniUserId')
-        elif create_res.get('status_code') == 409:
-            # User already registered with phone number — resolve existing BMONI identity
-            u_data, _ = _resolve_or_create_bmoni_user(client, phone_number)
-            if u_data:
-                u_info = u_data.get('user', u_data)
-                bmoni_user_id = u_info.get('bmoniUserId') or u_info.get('id')
+            client = BmoniClient()
 
-        if not bmoni_user_id:
-            bmoni_user_id = f"bmoni-{phone_number.replace('+', '')}"
-
-        # Create/Get distinct UserProfile for THIS user (never Bolaji demo user)
-        user, _ = UserProfile.objects.get_or_create(
-            bmoni_user_id=bmoni_user_id,
-            defaults={
-                'first_name': first_name,
-                'last_name': last_name,
-                'email': email,
-                'phone_number': phone_number,
-            },
-        )
-        user.first_name = first_name or user.first_name
-        user.last_name = last_name or user.last_name
-        user.email = email or user.email
-        user.phone_number = phone_number or user.phone_number
-        if not user.wallet_address:
-            user.wallet_address = '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7'
-        user.save()
-
-        # Seed initial transactions if brand new profile
-        if user.transactions.count() == 0:
-            demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
-            if demo_user:
-                for tx in demo_user.transactions.all():
-                    tx.pk = None
-                    tx.user = user
-                    tx.save()
-
-        # Step 2: Nigeria BVN Onboarding if BVN supplied
-        onboarding_res = None
-        status_res = None
-        if bvn and bmoni_user_id and not bmoni_user_id.startswith('bmoni-'):
-            onboarding_res = client.start_nigeria_onboarding(
-                user_id=bmoni_user_id,
-                bvn=bvn,
-                wallet_address=user.wallet_address,
+            # Step 1: Create BMONI user
+            create_res = client.create_user(
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone_number=phone_number,
             )
-            status_res = client.get_onboarding_status(bmoni_user_id)
-            if onboarding_res.get('success'):
+
+            bmoni_user_id = None
+            if create_res.get('success') and create_res.get('data'):
+                user_data = create_res['data'].get('user', create_res['data'])
+                bmoni_user_id = user_data.get('bmoniUserId') or user_data.get('id')
+            elif create_res.get('status_code') == 409:
+                u_data, _ = _resolve_or_create_bmoni_user(client, phone_number)
+                if u_data:
+                    u_info = u_data.get('user', u_data)
+                    bmoni_user_id = u_info.get('bmoniUserId') or u_info.get('id')
+
+            if not bmoni_user_id:
+                bmoni_user_id = f"bmoni-{phone_number.replace('+', '')}"
+
+            # Robust UserProfile resolution (prevents IntegrityError on unique fields)
+            user = UserProfile.objects.filter(bmoni_user_id=bmoni_user_id).first()
+            if not user and email:
+                user = UserProfile.objects.filter(email=email).first()
+            if not user and phone_number:
+                user = UserProfile.objects.filter(phone_number=phone_number).first()
+
+            if not user:
+                user = UserProfile.objects.create(
+                    bmoni_user_id=bmoni_user_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    phone_number=phone_number,
+                    wallet_address='0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7',
+                )
+            else:
+                user.bmoni_user_id = bmoni_user_id
+                user.first_name = first_name or user.first_name
+                user.last_name = last_name or user.last_name
+                user.email = email or user.email
+                user.phone_number = phone_number or user.phone_number
+                if not user.wallet_address:
+                    user.wallet_address = '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7'
+                user.save()
+
+            # Seed initial transactions if brand new profile
+            if user.transactions.count() == 0:
+                demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
+                if demo_user:
+                    for tx in demo_user.transactions.all():
+                        tx.pk = None
+                        tx.user = user
+                        tx.save()
+
+            # Step 2: Nigeria BVN Onboarding if BVN supplied
+            onboarding_res = None
+            status_res = None
+            if bvn and bmoni_user_id and not bmoni_user_id.startswith('bmoni-'):
+                onboarding_res = client.start_nigeria_onboarding(
+                    user_id=bmoni_user_id,
+                    bvn=bvn,
+                    wallet_address=user.wallet_address,
+                )
+                status_res = client.get_onboarding_status(bmoni_user_id)
+                if onboarding_res and onboarding_res.get('success'):
+                    user.onboarding_complete = True
+                    user.save()
+            else:
                 user.onboarding_complete = True
                 user.save()
-        else:
-            user.onboarding_complete = True
-            user.save()
 
-        return Response({
-            'status': 'success',
-            'message': 'BMONI registration & BVN onboarding processed',
-            'user': UserProfileSerializer(user).data,
-            'bmoni_create': create_res,
-            'bmoni_onboarding': onboarding_res['data'] if onboarding_res and onboarding_res.get('success') else onboarding_res,
-            'bmoni_status': status_res['data'] if status_res and status_res.get('success') else status_res,
-        })
+            return Response({
+                'status': 'success',
+                'message': 'BMONI registration & BVN onboarding processed',
+                'user': UserProfileSerializer(user).data,
+                'bmoni_create': create_res,
+                'bmoni_onboarding': onboarding_res.get('data') if isinstance(onboarding_res, dict) else onboarding_res,
+                'bmoni_status': status_res.get('data') if isinstance(status_res, dict) else status_res,
+            })
+
+        except Exception as fatal_err:
+            logger.exception(f"BmoniUserView registration error: {fatal_err}")
+            return Response(
+                {
+                    'status': 'error',
+                    'message': f"Registration processing error: {str(fatal_err)}",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class BmoniBalancesView(APIView):
@@ -667,73 +685,98 @@ class BmoniLoginView(APIView):
     """
 
     def post(self, request):
-        identifier = (
-            request.data.get('identifier')
-            or request.data.get('phone_number')
-            or request.data.get('bmoni_user_id')
-            or ''
-        ).strip()
+        try:
+            identifier = (
+                request.data.get('identifier')
+                or request.data.get('phone_number')
+                or request.data.get('bmoni_user_id')
+                or ''
+            ).strip()
 
-        if not identifier:
+            if not identifier:
+                return Response(
+                    {'status': 'error', 'message': 'Please enter a valid Phone Number, Email, or Account Name.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            client = BmoniClient()
+            u_data, error_msg = _resolve_or_create_bmoni_user(client, identifier)
+
+            if error_msg or not u_data:
+                return Response(
+                    {'status': 'error', 'message': error_msg or 'Could not resolve BMONI user.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # BMONI response shape varies - extract underlying user data dict
+            u_info = u_data.get('user', u_data)
+            resolved_bmoni_user_id = u_info.get('bmoniUserId') or u_info.get('id') or identifier
+
+            email = u_info.get('email') or ''
+            phone_number = u_info.get('phoneNumber') or identifier or ''
+            first_name = u_info.get('firstName') or 'BMONI'
+            last_name = u_info.get('lastName') or 'User'
+
+            # Distinct row per real BMONI identity (safe resolution)
+            user = UserProfile.objects.filter(bmoni_user_id=resolved_bmoni_user_id).first()
+            if not user and email:
+                user = UserProfile.objects.filter(email=email).first()
+            if not user and phone_number:
+                user = UserProfile.objects.filter(phone_number=phone_number).first()
+
+            if not user:
+                user = UserProfile.objects.create(
+                    bmoni_user_id=resolved_bmoni_user_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email or f"user_{resolved_bmoni_user_id[:8]}@bmoni.com",
+                    phone_number=phone_number,
+                    onboarding_complete=True,
+                )
+            else:
+                user.bmoni_user_id = resolved_bmoni_user_id
+                user.first_name = first_name or user.first_name
+                user.last_name = last_name or user.last_name
+                if email:
+                    user.email = email
+                if phone_number:
+                    user.phone_number = phone_number
+                user.onboarding_complete = True
+                user.save()
+
+            # Seed initial transactions if brand new user profile
+            if user.transactions.count() == 0:
+                from .seed_data import seed_demo_data
+                # Copy sample transactions from demo profile if new
+                demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
+                if demo_user:
+                    for tx in demo_user.transactions.all():
+                        tx.pk = None
+                        tx.user = user
+                        tx.save()
+
+            # Query live BMONI status and balances
+            status_res = client.get_onboarding_status(user.bmoni_user_id)
+            balance_res = client.get_balances(user.bmoni_user_id)
+
+            summary = get_financial_summary(user)
+
+            return Response({
+                'status': 'success',
+                'message': f'Logged in as BMONI user {user.first_name} {user.last_name}',
+                'user': UserProfileSerializer(user).data,
+                'bmoni_user_detail': u_info,
+                'bmoni_balances': balance_res.get('data') if isinstance(balance_res, dict) else None,
+                'bmoni_status': status_res.get('data') if isinstance(status_res, dict) else None,
+                'dashboard': summary,
+            })
+        except Exception as fatal_err:
+            logger.exception(f"BmoniLoginView fatal error: {fatal_err}")
             return Response(
-                {'error': 'Please enter a valid Phone Number, Email, or Account Name.'},
+                {
+                    'status': 'error',
+                    'message': f"Login error: {str(fatal_err)}",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        client = BmoniClient()
-        u_data, error_msg = _resolve_or_create_bmoni_user(client, identifier)
-
-        if error_msg or not u_data:
-            return Response(
-                {'status': 'error', 'message': error_msg or 'Could not resolve BMONI user.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # BMONI response shape varies - extract underlying user data dict
-        u_info = u_data.get('user', u_data)
-        resolved_bmoni_user_id = u_info.get('bmoniUserId') or u_info.get('id') or identifier
-
-        # Distinct row per real BMONI identity
-        user, _ = UserProfile.objects.get_or_create(
-            bmoni_user_id=resolved_bmoni_user_id,
-            defaults={
-                'first_name': u_info.get('firstName') or 'BMONI',
-                'last_name': u_info.get('lastName') or 'User',
-                'email': u_info.get('email') or f"user_{resolved_bmoni_user_id[:8]}@bmoni.com",
-                'phone_number': u_info.get('phoneNumber') or identifier,
-            },
-        )
-
-        user.first_name = u_info.get('firstName') or user.first_name
-        user.last_name = u_info.get('lastName') or user.last_name
-        user.email = u_info.get('email') or user.email
-        user.phone_number = u_info.get('phoneNumber') or identifier or user.phone_number
-        user.onboarding_complete = True
-        user.save()
-
-        # Seed initial transactions if brand new user profile
-        if user.transactions.count() == 0:
-            from .seed_data import seed_demo_data
-            # Copy sample transactions from demo profile if new
-            demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
-            if demo_user:
-                for tx in demo_user.transactions.all():
-                    tx.pk = None
-                    tx.user = user
-                    tx.save()
-
-        # Query live BMONI status and balances
-        status_res = client.get_onboarding_status(user.bmoni_user_id)
-        balance_res = client.get_balances(user.bmoni_user_id)
-
-        summary = get_financial_summary(user)
-
-        return Response({
-            'status': 'success',
-            'message': f'Logged in as BMONI user {user.first_name} {user.last_name}',
-            'user': UserProfileSerializer(user).data,
-            'bmoni_user_detail': u_info,
-            'bmoni_balances': balance_res.get('data'),
-            'bmoni_status': status_res.get('data'),
-            'dashboard': summary,
-        })

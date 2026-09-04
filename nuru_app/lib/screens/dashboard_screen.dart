@@ -1607,7 +1607,26 @@ class _ErrorView extends StatelessWidget {
                     label: const Text('Retry'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await ApiService.logout();
+                      onRetry();
+                    },
+                    icon: const Icon(Icons.cleaning_services_rounded, size: 18),
+                    label: const Text('Reset Session'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: NuruTheme.textSecondary,
+                      side: const BorderSide(color: NuruTheme.surfaceLight),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 SizedBox(
                   height: 48,
                   child: OutlinedButton.icon(
