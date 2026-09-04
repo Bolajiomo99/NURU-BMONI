@@ -577,26 +577,30 @@ class _CurrencyPill extends StatelessWidget {
         children: [
           Text(flag, style: const TextStyle(fontSize: 18)),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white60,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white60,
+                  ),
                 ),
-              ),
-              Text(
-                amount,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                Text(
+                  amount,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -805,13 +809,18 @@ class _MonthRow extends StatelessWidget {
           label,
           style: const TextStyle(fontSize: 12, color: NuruTheme.textMuted),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: color,
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -957,12 +966,16 @@ class _TransactionTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            '${isCredit ? '+' : '-'}${tx.currency == 'USD' ? '\$' : '₦'}${tx.amount.toStringAsFixed(tx.currency == 'USD' ? 2 : 0)}',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: isCredit ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
+          Flexible(
+            child: Text(
+              '${isCredit ? '+' : '-'}${tx.currency == 'USD' ? '\$' : '₦'}${tx.amount.toStringAsFixed(tx.currency == 'USD' ? 2 : 0)}',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: isCredit ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
