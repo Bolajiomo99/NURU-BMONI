@@ -213,21 +213,20 @@ class ApiService {
     required double amount,
     required String currency,
     required String toAddress,
+    String accountNumber = '',
+    String bankName = '',
+    String accountName = '',
     String description = '',
   }) async {
-    final url = await getBaseUrl();
-    final response = await http
-        .post(
-          Uri.parse('$url/action/transfer/'),
-          headers: _headers,
-          body: jsonEncode({
-            'amount': amount,
-            'currency': currency,
-            'to_address': toAddress,
-            'description': description,
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
+    final response = await _postWithFallback('/action/transfer/', {
+      'amount': amount,
+      'currency': currency,
+      'to_address': toAddress,
+      'account_number': accountNumber,
+      'bank_name': bankName,
+      'account_name': accountName,
+      'description': description,
+    });
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

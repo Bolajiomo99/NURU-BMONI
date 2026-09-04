@@ -513,7 +513,7 @@ class _ActionCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             isTransfer
-                ? 'Send \$${action.amount.toStringAsFixed(2)} ${action.currency}'
+                ? 'Send ${action.currency == "NGN" ? "₦" : "\$"}${action.amount.toStringAsFixed(action.currency == "NGN" ? 0 : 2)} ${action.currency}'
                 : 'Convert \$${action.amount.toStringAsFixed(2)} → ${action.toCurrency}',
             style: const TextStyle(
               fontSize: 15,
@@ -521,6 +521,34 @@ class _ActionCard extends StatelessWidget {
               color: NuruTheme.textPrimary,
             ),
           ),
+          if (isTransfer && (action.accountNumber.isNotEmpty || action.to.isNotEmpty || action.bankName.isNotEmpty)) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: NuruTheme.surfaceLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.account_balance_outlined, size: 14, color: NuruTheme.textMuted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (action.accountName.isNotEmpty) action.accountName,
+                        if (action.bankName.isNotEmpty) action.bankName,
+                        if (action.accountNumber.isNotEmpty) action.accountNumber,
+                        if (action.to.isNotEmpty && action.accountNumber.isEmpty && action.accountName.isEmpty) action.to,
+                      ].join(' • '),
+                      style: const TextStyle(fontSize: 12, color: NuruTheme.textSecondary, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
