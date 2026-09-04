@@ -30,14 +30,15 @@ class DashboardScreen extends ConsumerWidget {
           child: _DashboardContent(
             data: data,
             onExplain: () => _showExplainBottomSheet(context, ref),
-            onSettings: () => _showServerSettingsDialog(context, ref),
+            onSettings: () => _showServerSettingsDialog(context, ref, data.user),
+            onBmoniSignup: () => _showBmoniSignupSheet(context, ref, data.user),
           ),
         ),
       ),
     );
   }
 
-  void _showServerSettingsDialog(BuildContext context, WidgetRef ref) async {
+  void _showServerSettingsDialog(BuildContext context, WidgetRef ref, [UserInfo? user]) async {
     final currentUrl = await ApiService.getBaseUrl();
     final controller = TextEditingController(text: currentUrl);
 
@@ -70,19 +71,75 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Server Connection',
+              'Account & Server Settings',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: NuruTheme.textPrimary,
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Enter your backend URL for physical device testing.',
-              style: TextStyle(fontSize: 14, color: NuruTheme.textSecondary),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () {
+                Navigator.pop(context);
+                _showBmoniSignupSheet(context, ref, user ?? UserInfo(
+                  firstName: 'Bolaji',
+                  lastName: 'Jimoh',
+                  email: 'bolajijimoh8@gmail.com',
+                  phoneNumber: '+2348123456789',
+                  bmoniUserId: '',
+                  onboardingComplete: false,
+                ));
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: NuruTheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: NuruTheme.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.shield_rounded, color: NuruTheme.primary, size: 24),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'BMONI Sign Up & BVN Verification',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: NuruTheme.textPrimary,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Sign in with phone & verify BVN on BMONI API',
+                            style: TextStyle(fontSize: 12, color: NuruTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: NuruTheme.textMuted),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 20),
+            const Text(
+              'Server Connection URL',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: NuruTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: controller,
               style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
@@ -90,11 +147,6 @@ class DashboardScreen extends ConsumerWidget {
                 hintText: 'http://192.168.43.33:8000/api',
                 prefixIcon: Icon(Icons.link_rounded, color: NuruTheme.textMuted),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Mac Wi-Fi IP: 192.168.43.33:8000',
-              style: TextStyle(fontSize: 11, color: NuruTheme.primary),
             ),
             const SizedBox(height: 20),
             Row(
@@ -134,6 +186,214 @@ class DashboardScreen extends ConsumerWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showBmoniSignupSheet(BuildContext context, WidgetRef ref, UserInfo user) {
+    final firstNameCtrl = TextEditingController(text: user.firstName.isNotEmpty ? user.firstName : 'Bolaji');
+    final lastNameCtrl = TextEditingController(text: user.lastName.isNotEmpty ? user.lastName : 'Jimoh');
+    final emailCtrl = TextEditingController(text: user.email.isNotEmpty ? user.email : 'bolajijimoh8@gmail.com');
+    final phoneCtrl = TextEditingController(text: user.phoneNumber.isNotEmpty ? user.phoneNumber : '+2348123456789');
+    final bvnCtrl = TextEditingController(text: '22223333444');
+    bool isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: NuruTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: NuruTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: NuruTheme.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: const Icon(
+                        Icons.shield_rounded,
+                        color: NuruTheme.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'BMONI Sign Up & BVN',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: NuruTheme.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'Connect phone & verify BVN with live BMONI sandbox',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: NuruTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: firstNameCtrl,
+                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                  decoration: const InputDecoration(
+                    labelText: 'First Name',
+                    prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: lastNameCtrl,
+                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                  decoration: const InputDecoration(
+                    labelText: 'Last Name',
+                    prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number',
+                    hintText: '+2348123456789',
+                    prefixIcon: Icon(Icons.phone_outlined, color: NuruTheme.textMuted),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailCtrl,
+                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email Address',
+                    prefixIcon: Icon(Icons.email_outlined, color: NuruTheme.textMuted),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bvnCtrl,
+                  style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
+                  keyboardType: TextInputType.number,
+                  maxLength: 11,
+                  decoration: const InputDecoration(
+                    labelText: 'Bank Verification Number (BVN)',
+                    hintText: '11-digit BVN',
+                    prefixIcon: Icon(Icons.badge_outlined, color: NuruTheme.textMuted),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            HapticFeedback.mediumImpact();
+                            setState(() => isLoading = true);
+                            try {
+                              await ApiService.registerBmoniUser(
+                                firstName: firstNameCtrl.text.trim(),
+                                lastName: lastNameCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                phoneNumber: phoneCtrl.text.trim(),
+                                bvn: bvnCtrl.text.trim(),
+                              );
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ref.invalidate(dashboardProvider);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Row(
+                                      children: [
+                                        Icon(Icons.check_circle_rounded, color: Colors.white),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'BMONI Account Connected & BVN Verified!',
+                                            style: TextStyle(fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    backgroundColor: NuruTheme.healthyGreen,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setState(() => isLoading = false);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Onboarding failed: $e'),
+                                    backgroundColor: NuruTheme.dangerRed,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.black,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.verified_user_rounded, size: 20),
+                              SizedBox(width: 8),
+                              Text('Register & Verify BVN'),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -236,11 +496,13 @@ class _DashboardContent extends StatelessWidget {
   final DashboardData data;
   final VoidCallback onExplain;
   final VoidCallback onSettings;
+  final VoidCallback onBmoniSignup;
 
   const _DashboardContent({
     required this.data,
     required this.onExplain,
     required this.onSettings,
+    required this.onBmoniSignup,
   });
 
   @override
@@ -254,7 +516,11 @@ class _DashboardContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 16, 24, 0),
-            child: _Header(user: data.user, onSettings: onSettings),
+            child: _Header(
+              user: data.user,
+              onSettings: onSettings,
+              onBmoniSignup: onBmoniSignup,
+            ),
           ),
         ),
 
@@ -369,8 +635,13 @@ class _DashboardContent extends StatelessWidget {
 class _Header extends StatelessWidget {
   final UserInfo user;
   final VoidCallback onSettings;
+  final VoidCallback onBmoniSignup;
 
-  const _Header({required this.user, required this.onSettings});
+  const _Header({
+    required this.user,
+    required this.onSettings,
+    required this.onBmoniSignup,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -428,6 +699,48 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        GestureDetector(
+          onTap: onBmoniSignup,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: user.onboardingComplete
+                  ? NuruTheme.healthyGreen.withValues(alpha: 0.15)
+                  : NuruTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: user.onboardingComplete
+                    ? NuruTheme.healthyGreen.withValues(alpha: 0.4)
+                    : NuruTheme.primary.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  user.onboardingComplete
+                      ? Icons.verified_user_rounded
+                      : Icons.badge_outlined,
+                  color: user.onboardingComplete
+                      ? NuruTheme.healthyGreen
+                      : NuruTheme.primary,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  user.onboardingComplete ? 'BMONI Live' : 'Verify BVN',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: user.onboardingComplete
+                        ? NuruTheme.healthyGreen
+                        : NuruTheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
         GestureDetector(
           onTap: onSettings,
           child: Container(

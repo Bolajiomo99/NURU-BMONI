@@ -211,4 +211,34 @@ class ApiService {
       throw Exception('Swap action failed: ${response.body}');
     }
   }
+
+  /// Register / Connect BMONI Account & Perform BVN Onboarding
+  static Future<Map<String, dynamic>> registerBmoniUser({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phoneNumber,
+    required String bvn,
+  }) async {
+    final url = await getBaseUrl();
+    final response = await http
+        .post(
+          Uri.parse('$url/bmoni/user/'),
+          headers: _headers,
+          body: jsonEncode({
+            'first_name': firstName,
+            'last_name': lastName,
+            'email': email,
+            'phone_number': phoneNumber,
+            'bvn': bvn,
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('BMONI Registration failed: ${response.body}');
+    }
+  }
 }

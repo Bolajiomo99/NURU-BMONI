@@ -322,18 +322,70 @@ class SwapActionView(APIView):
 class BmoniUserView(APIView):
     """
     POST /api/bmoni/user/
-    Create a user in the BMONI system.
+    Create/Register a user in BMONI system and perform BVN onboarding.
     """
 
     def post(self, request):
+        first_name = request.data.get('first_name', 'Bolaji')
+        last_name = request.data.get('last_name', 'Jimoh')
+        email = request.data.get('email', 'bolajijimoh8@gmail.com')
+        phone_number = request.data.get('phone_number', '+2348123456789')
+        bvn = request.data.get('bvn', '')
+
         client = BmoniClient()
-        result = client.create_user(
-            first_name='Bunch',
-            last_name='Dillon',
-            email='bunch.dillon@example.com',
-            phone_number='+2348000000000',
+        user = _get_demo_user()
+
+        # Step 1: Create BMONI user
+        create_res = client.create_user(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone_number=phone_number,
         )
-        return Response(result)
+
+        bmoni_user_id = None
+        if create_res.get('success'):
+            user_data = create_res['data'].get('user', {})
+            bmoni_user_id = user_data.get('bmoniUserId') or user_data.get('id') or create_res['data'].get('bmoniUserId')
+        elif create_res.get('status_code') == 409:
+            # User already registered with phone number
+            bmoni_user_id = user.bmoni_user_id if user.bmoni_user_id and user.bmoni_user_id != 'demo-user-001' else f"bmoni-{phone_number.replace('+', '')}"
+
+        if not bmoni_user_id:
+            bmoni_user_id = f"bmoni-{phone_number.replace('+', '')}"
+
+        # Update local UserProfile
+        user.first_name = first_name
+        user.last_name = last_name
+        user.email = email
+        user.phone_number = phone_number
+        user.bmoni_user_id = bmoni_user_id
+        if not user.wallet_address:
+            user.wallet_address = '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7'
+        user.save()
+
+        # Step 2: Nigeria BVN Onboarding if BVN supplied
+        onboarding_res = None
+        status_res = None
+        if bvn and bmoni_user_id and not bmoni_user_id.startswith('bmoni-'):
+            onboarding_res = client.start_nigeria_onboarding(
+                user_id=bmoni_user_id,
+                bvn=bvn,
+                wallet_address=user.wallet_address,
+            )
+            status_res = client.get_onboarding_status(bmoni_user_id)
+            if onboarding_res.get('success'):
+                user.onboarding_complete = True
+                user.save()
+
+        return Response({
+            'status': 'success',
+            'message': 'BMONI registration & BVN onboarding processed',
+            'user': UserProfileSerializer(user).data,
+            'bmoni_create': create_res,
+            'bmoni_onboarding': onboarding_res['data'] if onboarding_res and onboarding_res.get('success') else onboarding_res,
+            'bmoni_status': status_res['data'] if status_res and status_res.get('success') else status_res,
+        })
 
 
 class BmoniBalancesView(APIView):
