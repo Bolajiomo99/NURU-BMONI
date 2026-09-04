@@ -64,6 +64,11 @@ class BmoniClient:
         """GET /v1/users/{userId} — Get BMONI user profile details."""
         return self._request('GET', f'/v1/users/{user_id}')
 
+    def get_user_by_phone(self, phone_number):
+        """GET /v1/smart-wallets/by-phone?phoneNumber=... — Look up a BMONI user by phone."""
+        return self._request('GET', '/v1/smart-wallets/by-phone',
+                              params={'phoneNumber': phone_number})
+
     # ── Stage 2: Smart Wallet ─────────────────────────────────────
     def request_owner_proof_challenge(self, user_id, currency, owner_address):
         """POST /v1/users/{userId}/smart-wallets/owner-proof-challenges"""

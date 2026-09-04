@@ -17,13 +17,18 @@ from .serializers import (
 from .analytics import get_financial_summary, can_afford
 from .ai_engine import chat_with_nuru, explain_finances, get_ai_insight
 from .bmoni_client import BmoniClient
+from .phone_utils import normalize_phone_e164, InvalidPhoneNumberError
 from .seed_data import seed_demo_data
 
 logger = logging.getLogger(__name__)
 
 
 def _get_demo_user():
-    """Get or create the demo user."""
+    """Get or create the seeded demo user (Bolaji).
+
+    This is the fallback persona used when no real BMONI identity is
+    attached to the request — never mutated by a real login.
+    """
     try:
         user = UserProfile.objects.filter(email='bolaji@nuru.demo').first()
         if not user or user.transactions.filter(description__contains='—').exists():
@@ -40,6 +45,22 @@ def _get_demo_user():
             raise err
 
 
+def _get_current_user(request):
+    """Resolve the acting UserProfile for this request.
+
+    The Flutter app sends the X-Bmoni-User-Id header for every request
+    once a real BMONI login has succeeded. If it's absent or doesn't match
+    a known profile (no login yet, or a flaky BMONI lookup), this falls
+    back to the seeded demo persona so the app still has data to show.
+    """
+    header_id = request.headers.get('X-Bmoni-User-Id', '').strip()
+    if header_id:
+        user = UserProfile.objects.filter(bmoni_user_id=header_id).first()
+        if user:
+            return user
+    return _get_demo_user()
+
+
 class DashboardView(APIView):
     """
     GET /api/dashboard/
@@ -49,7 +70,7 @@ class DashboardView(APIView):
 
     def get(self, request):
         try:
-            user = _get_demo_user()
+            user = _get_current_user(request)
             summary = get_financial_summary(user)
 
             try:
@@ -96,7 +117,7 @@ class ChatView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user = _get_demo_user()
+        user = _get_current_user(request)
         message = serializer.validated_data['message']
 
         result = chat_with_nuru(user, message)
@@ -105,14 +126,14 @@ class ChatView(APIView):
 
     def get(self, request):
         """GET /api/chat/ — Return chat history."""
-        user = _get_demo_user()
+        user = _get_current_user(request)
         messages = ChatMessage.objects.filter(user=user).order_by('timestamp')
         serializer = ChatMessageSerializer(messages, many=True)
         return Response({'messages': serializer.data})
 
     def delete(self, request):
         """DELETE /api/chat/ — Clear chat history."""
-        user = _get_demo_user()
+        user = _get_current_user(request)
         ChatMessage.objects.filter(user=user).delete()
         return Response({'status': 'cleared'})
 
@@ -124,7 +145,7 @@ class ExplainView(APIView):
     """
 
     def get(self, request):
-        user = _get_demo_user()
+        user = _get_current_user(request)
         result = explain_finances(user)
         return Response(result)
 
@@ -145,7 +166,7 @@ class AffordabilityCheckView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = _get_demo_user()
+        user = _get_current_user(request)
         result = can_afford(user, amount)
         return Response(result)
 
@@ -162,7 +183,7 @@ class TransferActionView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user = _get_demo_user()
+        user = _get_current_user(request)
         data = serializer.validated_data
 
         # In demo mode: simulate the BMONI proposal flow
@@ -245,7 +266,7 @@ class SwapActionView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user = _get_demo_user()
+        user = _get_current_user(request)
         data = serializer.validated_data
 
         steps = [
@@ -333,7 +354,7 @@ class BmoniUserView(APIView):
         bvn = request.data.get('bvn', '')
 
         client = BmoniClient()
-        user = _get_demo_user()
+        user = _get_current_user(request)
 
         # Step 1: Create BMONI user
         create_res = client.create_user(
@@ -395,7 +416,7 @@ class BmoniBalancesView(APIView):
     """
 
     def get(self, request):
-        user = _get_demo_user()
+        user = _get_current_user(request)
         if not user.bmoni_user_id or user.bmoni_user_id == 'demo-user-001':
             # Return calculated balances for demo
             summary = get_financial_summary(user)
@@ -431,7 +452,7 @@ class TransactionsView(APIView):
     """
 
     def get(self, request):
-        user = _get_demo_user()
+        user = _get_current_user(request)
         transactions = user.transactions.all()
         serializer = TransactionSerializer(transactions, many=True)
         return Response({'transactions': serializer.data})
@@ -440,38 +461,83 @@ class TransactionsView(APIView):
 class BmoniLoginView(APIView):
     """
     POST /api/bmoni/login/
-    Connect/Log in with an existing BMONI User ID to view real live data & balances.
+    Log in with an existing BMONI User ID or a registered phone number to
+    view real live data & balances.
+
+    A phone number is normalized to E.164 (default region NG) and resolved
+    via BMONI's by-phone lookup — never guessed or fabricated. A failed
+    lookup (404) never falls back to the seeded demo persona; it returns a
+    distinct 'not_found' response so the frontend can point the user at
+    BMONI onboarding instead.
     """
 
     def post(self, request):
-        bmoni_user_id = request.data.get('bmoni_user_id', '').strip()
-        phone_number = request.data.get('phone_number', '').strip()
+        bmoni_user_id = (request.data.get('bmoni_user_id') or '').strip()
+        raw_phone = (request.data.get('phone_number') or '').strip()
 
-        if not bmoni_user_id and not phone_number:
+        if not bmoni_user_id and not raw_phone:
             return Response(
                 {'error': 'Please enter a valid BMONI User ID or phone number.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         client = BmoniClient()
-        user = _get_demo_user()
 
-        target_id = bmoni_user_id or f"bmoni-{phone_number.replace('+', '')}"
-
-        # Fetch real BMONI user profile details
-        user_detail_res = client.get_user(target_id)
-        if user_detail_res.get('success') and user_detail_res.get('data'):
-            u_data = user_detail_res['data']
-            user.first_name = u_data.get('firstName') or user.first_name
-            user.last_name = u_data.get('lastName') or user.last_name
-            user.email = u_data.get('email') or user.email
-            user.phone_number = u_data.get('phoneNumber') or user.phone_number
-            user.bmoni_user_id = u_data.get('bmoniUserId') or target_id
+        if bmoni_user_id:
+            lookup_res = client.get_user(bmoni_user_id)
         else:
-            user.bmoni_user_id = target_id
-            if phone_number:
-                user.phone_number = phone_number
+            try:
+                e164_phone = normalize_phone_e164(raw_phone)
+            except InvalidPhoneNumberError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            lookup_res = client.get_user_by_phone(e164_phone)
 
+        if lookup_res.get('status_code') == 404:
+            return Response(
+                {
+                    'status': 'not_found',
+                    'message': 'No BMONI account found for that BMONI User ID or phone number.',
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not lookup_res.get('success') or not lookup_res.get('data'):
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'Could not reach BMONI to verify this account. Please try again.',
+                    'detail': lookup_res.get('data'),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # BMONI's response shape varies by endpoint - some nest under 'user'.
+        u_data = lookup_res['data'].get('user', lookup_res['data'])
+        resolved_bmoni_user_id = u_data.get('bmoniUserId') or u_data.get('id') or bmoni_user_id
+
+        if not resolved_bmoni_user_id:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'BMONI returned no user identifier for this account.',
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Distinct row per real BMONI identity - never the seeded demo user.
+        user, _ = UserProfile.objects.get_or_create(
+            bmoni_user_id=resolved_bmoni_user_id,
+            defaults={
+                'first_name': u_data.get('firstName', ''),
+                'last_name': u_data.get('lastName', ''),
+                'email': u_data.get('email', ''),
+                'phone_number': u_data.get('phoneNumber') or raw_phone,
+            },
+        )
+        user.first_name = u_data.get('firstName') or user.first_name
+        user.last_name = u_data.get('lastName') or user.last_name
+        user.email = u_data.get('email') or user.email
+        user.phone_number = u_data.get('phoneNumber') or raw_phone or user.phone_number
         user.onboarding_complete = True
         user.save()
 
@@ -485,7 +551,7 @@ class BmoniLoginView(APIView):
             'status': 'success',
             'message': f'Logged in as BMONI user {user.bmoni_user_id}',
             'user': UserProfileSerializer(user).data,
-            'bmoni_user_detail': user_detail_res.get('data'),
+            'bmoni_user_detail': lookup_res.get('data'),
             'bmoni_balances': balance_res.get('data'),
             'bmoni_status': status_res.get('data'),
             'dashboard': summary,

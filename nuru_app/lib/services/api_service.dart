@@ -5,9 +5,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_data.dart';
 import '../models/chat_message.dart';
 
+/// Thrown when a BMONI login lookup (by user ID or phone) comes back 404 -
+/// distinct from a network/server error so the UI can show the
+/// "no BMONI account found" state instead of a generic failure toast.
+class BmoniAccountNotFoundException implements Exception {
+  final String message;
+  BmoniAccountNotFoundException(this.message);
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   static const String _urlKey = 'nuru_backend_api_url';
+  static const String _currentUserIdKey = 'nuru_current_bmoni_user_id';
   static String? _cachedUrl;
+  static String? _cachedCurrentUserId;
 
   /// Candidate URLs to test if primary fails
   static List<String> get _candidateUrls {
@@ -59,10 +71,34 @@ class ApiService {
     debugPrint('⚙️ Updated NURU backend URL to: $formatted');
   }
 
-  static Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
+  /// The bmoni_user_id of whoever last logged in via [loginBmoniUser], sent
+  /// on every subsequent request so the backend knows who "current user"
+  /// means. Null before any real login - the backend then falls back to
+  /// its seeded demo persona.
+  static Future<String?> getCurrentUserId() async {
+    if (_cachedCurrentUserId != null) return _cachedCurrentUserId;
+    final prefs = await SharedPreferences.getInstance();
+    _cachedCurrentUserId = prefs.getString(_currentUserIdKey);
+    return _cachedCurrentUserId;
+  }
+
+  static Future<void> _setCurrentUserId(String bmoniUserId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_currentUserIdKey, bmoniUserId);
+    _cachedCurrentUserId = bmoniUserId;
+  }
+
+  static Future<Map<String, String>> get _headers async {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    final userId = await getCurrentUserId();
+    if (userId != null && userId.isNotEmpty) {
+      headers['X-Bmoni-User-Id'] = userId;
+    }
+    return headers;
+  }
 
   /// Helper to execute GET with auto-fallback to alternate URLs if connection fails
   static Future<http.Response> _getWithFallback(String path) async {
@@ -71,7 +107,7 @@ class ApiService {
     // First try the live Railway production API
     try {
       final res = await http
-          .get(Uri.parse('$liveRailwayUrl$path'), headers: _headers)
+          .get(Uri.parse('$liveRailwayUrl$path'), headers: await _headers)
           .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         _cachedUrl = liveRailwayUrl;
@@ -84,7 +120,7 @@ class ApiService {
     if (primary != liveRailwayUrl) {
       try {
         final res = await http
-            .get(Uri.parse('$primary$path'), headers: _headers)
+            .get(Uri.parse('$primary$path'), headers: await _headers)
             .timeout(const Duration(seconds: 4));
         if (res.statusCode == 200) return res;
       } catch (_) {}
@@ -95,7 +131,7 @@ class ApiService {
       if (candidate == primary || candidate == liveRailwayUrl) continue;
       try {
         final res = await http
-            .get(Uri.parse('$candidate$path'), headers: _headers)
+            .get(Uri.parse('$candidate$path'), headers: await _headers)
             .timeout(const Duration(seconds: 3));
         if (res.statusCode == 200) {
           await setBaseUrl(candidate);
@@ -106,7 +142,7 @@ class ApiService {
 
     // Try live Railway URL one last time to surface error
     return await http
-        .get(Uri.parse('$liveRailwayUrl$path'), headers: _headers)
+        .get(Uri.parse('$liveRailwayUrl$path'), headers: await _headers)
         .timeout(const Duration(seconds: 8));
   }
 
@@ -119,7 +155,7 @@ class ApiService {
       final res = await http
           .post(
             Uri.parse('$liveRailwayUrl$path'),
-            headers: _headers,
+            headers: await _headers,
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 25));
@@ -136,7 +172,7 @@ class ApiService {
         final res = await http
             .post(
               Uri.parse('$primary$path'),
-              headers: _headers,
+              headers: await _headers,
               body: jsonEncode(body),
             )
             .timeout(const Duration(seconds: 15));
@@ -148,7 +184,7 @@ class ApiService {
     return await http
         .post(
           Uri.parse('$liveRailwayUrl$path'),
-          headers: _headers,
+          headers: await _headers,
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 25));
@@ -194,7 +230,7 @@ class ApiService {
   /// Clear chat history
   static Future<void> clearChatHistory() async {
     final url = await getBaseUrl();
-    await http.delete(Uri.parse('$url/chat/'), headers: _headers);
+    await http.delete(Uri.parse('$url/chat/'), headers: await _headers);
   }
 
   /// Generate Explain My Money story
@@ -219,7 +255,7 @@ class ApiService {
     final response = await http
         .post(
           Uri.parse('$url/action/transfer/'),
-          headers: _headers,
+          headers: await _headers,
           body: jsonEncode({
             'amount': amount,
             'currency': currency,
@@ -246,7 +282,7 @@ class ApiService {
     final response = await http
         .post(
           Uri.parse('$url/action/swap/'),
-          headers: _headers,
+          headers: await _headers,
           body: jsonEncode({
             'amount': amount,
             'from_currency': fromCurrency,
@@ -295,8 +331,19 @@ class ApiService {
       'phone_number': phoneNumber ?? '',
     });
 
+    final json = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final resolvedId = json['user']?['bmoni_user_id'] as String?;
+      if (resolvedId != null && resolvedId.isNotEmpty) {
+        await _setCurrentUserId(resolvedId);
+      }
+      return json;
+    } else if (response.statusCode == 404) {
+      throw BmoniAccountNotFoundException(
+        json['message'] as String? ??
+            'No BMONI account found for that BMONI User ID or phone number.',
+      );
     } else {
       throw Exception('BMONI Login failed: ${response.body}');
     }

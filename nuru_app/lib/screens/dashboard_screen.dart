@@ -510,6 +510,30 @@ class DashboardScreen extends ConsumerWidget {
                                     ),
                                   );
                                 }
+                              } on BmoniAccountNotFoundException catch (e) {
+                                setState(() => isLoading = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.info_outline_rounded, color: Colors.white),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              '${e.message} Download the BMONI app to create an account first.',
+                                              style: const TextStyle(fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: NuruTheme.textMuted,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      duration: const Duration(seconds: 5),
+                                    ),
+                                  );
+                                }
                               } catch (e) {
                                 setState(() => isLoading = false);
                                 if (context.mounted) {
