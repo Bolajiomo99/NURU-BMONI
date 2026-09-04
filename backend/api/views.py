@@ -377,12 +377,24 @@ class BmoniUserView(APIView):
         except InvalidPhoneNumberError:
             phone_number = raw_phone if raw_phone.startswith('+') else f"+234{raw_phone.lstrip('0')}"
 
-        if not first_name:
-            first_name = 'User'
-        if not last_name:
-            last_name = 'BMONI'
-        if not email:
-            email = f"user_{abs(hash(phone_number))}@bmoni-demo.com"
+        # Persona matching rules per BMONI Sandbox documentation
+        if bvn == '95888168924':
+            first_name = first_name if first_name and first_name != 'User' else 'Bunch'
+            last_name = last_name if last_name and last_name != 'BMONI' else 'Dillon'
+            phone_number = '+2348000000000' if not raw_phone or raw_phone in ('08000000000', '+2348000000000') else phone_number
+            email = email or 'bunch.dillon@example.com'
+        elif bvn == '22222222222':
+            first_name = first_name if first_name and first_name != 'User' else 'Samson'
+            last_name = last_name if last_name and last_name != 'BMONI' else 'Jabo'
+            phone_number = '+2348000000001' if not raw_phone or raw_phone in ('08000000001', '+2348000000001') else phone_number
+            email = email or 'samson.jabo@example.com'
+        else:
+            if not first_name:
+                first_name = 'User'
+            if not last_name:
+                last_name = 'BMONI'
+            if not email:
+                email = f"user_{abs(hash(phone_number))}@bmoni-demo.com"
 
         client = BmoniClient()
 

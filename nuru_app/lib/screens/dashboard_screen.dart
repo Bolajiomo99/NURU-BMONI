@@ -328,6 +328,92 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
                 if (activeTab == 0) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: NuruTheme.surfaceLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NuruTheme.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.science_rounded, size: 16, color: NuruTheme.primary),
+                            SizedBox(width: 6),
+                            Text(
+                              'BMONI Sandbox Test Personas',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: NuruTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  firstNameCtrl.text = 'Bunch';
+                                  lastNameCtrl.text = 'Dillon';
+                                  phoneCtrl.text = '08000000000';
+                                  emailCtrl.text = 'bunch.dillon@example.com';
+                                  bvnCtrl.text = '95888168924';
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: NuruTheme.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: NuruTheme.surfaceLight),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'Bunch Dillon\n(BVN: 95888168924)',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 11, color: NuruTheme.textPrimary, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  firstNameCtrl.text = 'Samson';
+                                  lastNameCtrl.text = 'Jabo';
+                                  phoneCtrl.text = '08000000001';
+                                  emailCtrl.text = 'samson.jabo@example.com';
+                                  bvnCtrl.text = '22222222222';
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: NuruTheme.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: NuruTheme.surfaceLight),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'Samson Jabo\n(BVN: 22222222222)',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 11, color: NuruTheme.textPrimary, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                   TextField(
                     controller: firstNameCtrl,
                     style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
