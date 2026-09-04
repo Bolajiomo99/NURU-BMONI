@@ -360,14 +360,31 @@ class BmoniUserView(APIView):
     """
 
     def post(self, request):
-        first_name = request.data.get('first_name', 'Bolaji')
-        last_name = request.data.get('last_name', 'Jimoh')
-        email = request.data.get('email', 'bolajijimoh8@gmail.com')
-        phone_number = request.data.get('phone_number', '+2348123456789')
-        bvn = request.data.get('bvn', '')
+        first_name = (request.data.get('first_name') or '').strip()
+        last_name = (request.data.get('last_name') or '').strip()
+        email = (request.data.get('email') or '').strip()
+        raw_phone = (request.data.get('phone_number') or '').strip()
+        bvn = (request.data.get('bvn') or '').strip()
+
+        if not raw_phone:
+            return Response(
+                {'error': 'Phone number is required for BMONI registration.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            phone_number = normalize_phone_e164(raw_phone)
+        except InvalidPhoneNumberError:
+            phone_number = raw_phone if raw_phone.startswith('+') else f"+234{raw_phone.lstrip('0')}"
+
+        if not first_name:
+            first_name = 'User'
+        if not last_name:
+            last_name = 'BMONI'
+        if not email:
+            email = f"user_{abs(hash(phone_number))}@bmoni-demo.com"
 
         client = BmoniClient()
-        user = _get_current_user(request)
 
         # Step 1: Create BMONI user
         create_res = client.create_user(
@@ -382,21 +399,41 @@ class BmoniUserView(APIView):
             user_data = create_res['data'].get('user', {})
             bmoni_user_id = user_data.get('bmoniUserId') or user_data.get('id') or create_res['data'].get('bmoniUserId')
         elif create_res.get('status_code') == 409:
-            # User already registered with phone number
-            bmoni_user_id = user.bmoni_user_id if user.bmoni_user_id and user.bmoni_user_id != 'demo-user-001' else f"bmoni-{phone_number.replace('+', '')}"
+            # User already registered with phone number — resolve existing BMONI identity
+            u_data, _ = _resolve_or_create_bmoni_user(client, phone_number)
+            if u_data:
+                u_info = u_data.get('user', u_data)
+                bmoni_user_id = u_info.get('bmoniUserId') or u_info.get('id')
 
         if not bmoni_user_id:
             bmoni_user_id = f"bmoni-{phone_number.replace('+', '')}"
 
-        # Update local UserProfile
-        user.first_name = first_name
-        user.last_name = last_name
-        user.email = email
-        user.phone_number = phone_number
-        user.bmoni_user_id = bmoni_user_id
+        # Create/Get distinct UserProfile for THIS user (never Bolaji demo user)
+        user, _ = UserProfile.objects.get_or_create(
+            bmoni_user_id=bmoni_user_id,
+            defaults={
+                'first_name': first_name,
+                'last_name': last_name,
+                'email': email,
+                'phone_number': phone_number,
+            },
+        )
+        user.first_name = first_name or user.first_name
+        user.last_name = last_name or user.last_name
+        user.email = email or user.email
+        user.phone_number = phone_number or user.phone_number
         if not user.wallet_address:
             user.wallet_address = '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7'
         user.save()
+
+        # Seed initial transactions if brand new profile
+        if user.transactions.count() == 0:
+            demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
+            if demo_user:
+                for tx in demo_user.transactions.all():
+                    tx.pk = None
+                    tx.user = user
+                    tx.save()
 
         # Step 2: Nigeria BVN Onboarding if BVN supplied
         onboarding_res = None
@@ -411,6 +448,9 @@ class BmoniUserView(APIView):
             if onboarding_res.get('success'):
                 user.onboarding_complete = True
                 user.save()
+        else:
+            user.onboarding_complete = True
+            user.save()
 
         return Response({
             'status': 'success',

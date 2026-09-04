@@ -281,7 +281,12 @@ class ApiService {
     });
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final json = jsonDecode(response.body);
+      final resolvedId = json['user']?['bmoni_user_id'] as String?;
+      if (resolvedId != null && resolvedId.isNotEmpty) {
+        await _setCurrentUserId(resolvedId);
+      }
+      return json;
     } else {
       throw Exception('BMONI Registration failed: ${response.body}');
     }
