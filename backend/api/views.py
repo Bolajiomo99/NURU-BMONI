@@ -48,17 +48,26 @@ def _get_demo_user():
 def _get_current_user(request):
     """Resolve the acting UserProfile for this request.
 
-    The Flutter app sends the X-Bmoni-User-Id header for every request
-    once a real BMONI login has succeeded. If it's absent or doesn't match
-    a known profile (no login yet, or a flaky BMONI lookup), this falls
-    back to the seeded demo persona so the app still has data to show.
+    If X-Bmoni-User-Id header is present, returns the authenticated user.
+    If absent, returns a guest profile with $0 balance (Option A).
     """
     header_id = request.headers.get('X-Bmoni-User-Id', '').strip()
     if header_id:
         user = UserProfile.objects.filter(bmoni_user_id=header_id).first()
         if user:
             return user
-    return _get_demo_user()
+
+    guest_user, _ = UserProfile.objects.get_or_create(
+        bmoni_user_id='guest-unauthenticated',
+        defaults={
+            'first_name': 'Guest',
+            'last_name': 'User',
+            'email': 'guest@nuru.app',
+            'phone_number': '',
+            'onboarding_complete': False,
+        }
+    )
+    return guest_user
 
 
 class DashboardView(APIView):
@@ -71,6 +80,45 @@ class DashboardView(APIView):
     def get(self, request):
         try:
             user = _get_current_user(request)
+
+            # Option A: Zero balance & prompt to sign in before logging in
+            if user.bmoni_user_id == 'guest-unauthenticated':
+                return Response({
+                    'user': {
+                        'first_name': 'Guest',
+                        'last_name': '',
+                        'bmoni_user_id': '',
+                        'onboarding_complete': False,
+                    },
+                    'health_score': 0,
+                    'health_status': 'Not Connected',
+                    'balances': {
+                        'usd': 0.0,
+                        'ngn': 0.0,
+                        'total_usd_equivalent': 0.0,
+                    },
+                    'this_month': {
+                        'income_usd': 0.0,
+                        'income_ngn': 0.0,
+                        'spending_usd': 0.0,
+                        'spending_ngn': 0.0,
+                        'net_usd': 0.0,
+                        'net_ngn': 0.0,
+                    },
+                    'trends': {
+                        'income_change_pct': 0.0,
+                        'spending_change_pct': 0.0,
+                    },
+                    'categories': [],
+                    'safe_weekly_spend_usd': 0.0,
+                    'currency_concentration': {
+                        'usd_pct': 0.0,
+                        'ngn_pct': 0.0,
+                    },
+                    'recent_transactions': [],
+                    'ai_insight': 'Welcome to NURU AI! Connect your BMONI account or log in with a Test Persona to view your live balances and financial insights.',
+                })
+
             summary = get_financial_summary(user)
 
             try:
@@ -84,6 +132,7 @@ class DashboardView(APIView):
                     'first_name': user.first_name,
                     'last_name': user.last_name,
                     'bmoni_user_id': user.bmoni_user_id,
+                    'onboarding_complete': user.onboarding_complete,
                 },
                 'health_score': summary['health_score'],
                 'health_status': summary['health_status'],
@@ -97,7 +146,6 @@ class DashboardView(APIView):
                 'ai_insight': ai_insight,
             })
         except Exception as main_err:
-            # Log the traceback server-side; never return it to the client.
             logger.exception(f"DashboardView fatal error: {main_err}")
             return Response(
                 {'error': 'Could not load dashboard data.'},
