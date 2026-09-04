@@ -46,20 +46,20 @@ class ApiService {
       return _cachedUrl!;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString(_urlKey);
-
-    if (savedUrl != null && savedUrl.isNotEmpty) {
-      _cachedUrl = savedUrl;
-      return savedUrl;
-    }
-
     if (kIsWeb) {
       final webOrigin = Uri.base.origin;
       if (webOrigin.isNotEmpty && webOrigin != 'null') {
         _cachedUrl = '$webOrigin/api';
         return _cachedUrl!;
       }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString(_urlKey);
+
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      _cachedUrl = savedUrl;
+      return savedUrl;
     }
 
     _cachedUrl = 'https://nuru-bmoni.up.railway.app/api';
@@ -114,7 +114,8 @@ class ApiService {
     return headers;
   }
 
-  /// Helper to execute GET with auto-fallback to alternate URLs if connection fails
+  /// Helper to execute GET with auto-fallback to alternate URLs if connection fails.
+  /// Returns the response even for non-200 status codes so callers can handle them.
   static Future<http.Response> _getWithFallback(String path) async {
     final primary = await getBaseUrl();
     final urls = {primary, ..._candidateUrls}.toList();
@@ -125,10 +126,8 @@ class ApiService {
         final res = await http
             .get(Uri.parse('$base$path'), headers: await _headers)
             .timeout(const Duration(seconds: 10));
-        if (res.statusCode == 200) {
-          _cachedUrl = base;
-          return res;
-        }
+        _cachedUrl = base;
+        return res;
       } catch (e) {
         lastException = e;
       }
@@ -336,8 +335,12 @@ class ApiService {
     }
   }
 
-  /// Reset session context back to unauthenticated guest mode
+  /// Reset session context back to unauthenticated guest mode and clear cached URLs
   static Future<void> logout() async {
-    await _setCurrentUserId('');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_urlKey);
+    await prefs.setString(_currentUserIdKey, '');
+    _cachedUrl = null;
+    _cachedCurrentUserId = null;
   }
 }
