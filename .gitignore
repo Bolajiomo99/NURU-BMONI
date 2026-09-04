@@ -5,8 +5,8 @@ backend/.env
 # Python & Django
 backend/venv/
 backend/*venv*/
-backend/__pycache__/
-backend/*.pyc
+**/__pycache__/
+*.pyc
 backend/db.sqlite3
 backend/db.sqlite3-journal
 

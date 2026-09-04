@@ -83,6 +83,10 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Flutter web build served at root URL via WhiteNoise
+FLUTTER_WEB_DIR = BASE_DIR.parent / 'nuru_app' / 'build' / 'web'
+WHITENOISE_ROOT = str(FLUTTER_WEB_DIR) if FLUTTER_WEB_DIR.exists() else None
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {

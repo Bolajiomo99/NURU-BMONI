@@ -136,7 +136,9 @@ class ApiService {
     throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
   }
 
-  /// Helper to execute POST with auto-fallback to alternate URLs if connection fails
+  /// Helper to execute POST with auto-fallback to alternate URLs if connection fails.
+  /// Returns the response even for non-200 status codes so callers can
+  /// handle 404, 400, 502, etc. — only network/socket errors trigger fallback.
   static Future<http.Response> _postWithFallback(String path, Map<String, dynamic> body) async {
     final primary = await getBaseUrl();
     final urls = {primary, ..._candidateUrls}.toList();
@@ -151,10 +153,10 @@ class ApiService {
               body: jsonEncode(body),
             )
             .timeout(const Duration(seconds: 12));
-        if (res.statusCode == 200) {
-          _cachedUrl = base;
-          return res;
-        }
+        // Server responded — cache this working URL and return immediately.
+        // Let the caller decide what to do with non-200 status codes.
+        _cachedUrl = base;
+        return res;
       } catch (e) {
         lastException = e;
       }
