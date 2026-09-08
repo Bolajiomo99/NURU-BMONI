@@ -31,14 +31,14 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
       icon: Icons.psychology_rounded,
     ),
     _PipelineStep(
-      title: 'BMONI Proposal Created',
+      title: 'Smart Wallet Proposal Created',
       detail: 'Smart wallet proposal submitted',
       icon: Icons.description_rounded,
     ),
     _PipelineStep(
-      title: 'Admin Approval',
-      detail: 'Proposal approval vote confirmed',
-      icon: Icons.verified_rounded,
+      title: 'Security Policy Verification',
+      detail: 'Multi-sig consensus policy verified',
+      icon: Icons.shield_rounded,
     ),
     _PipelineStep(
       title: 'Secure Signature',

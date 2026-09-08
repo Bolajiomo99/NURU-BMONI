@@ -122,7 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                           SizedBox(width: 6),
                           Text(
-                            'Connected to BMONI',
+                            'Connected & Protected',
                             style: TextStyle(
                               fontSize: 12,
                               color: NuruTheme.textMuted,

@@ -148,11 +148,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                         ),
                                       ),
                                       Text(
-                                        'by BMONI',
+                                        'AI Financial Copilot',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
-                                          color: NuruTheme.textMuted,
+                                          color: NuruTheme.primary,
                                           letterSpacing: 1.5,
                                         ),
                                       ),
@@ -297,7 +297,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        'Secured by BMONI Infrastructure',
+                                        'Secured by Multi-Sig Infrastructure',
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: NuruTheme.textMuted,

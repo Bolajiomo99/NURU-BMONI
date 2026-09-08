@@ -48,11 +48,35 @@ class SwapActionSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=15, decimal_places=2)
 
 
+class PinSetupSerializer(serializers.Serializer):
+    pin = serializers.CharField(min_length=4, max_length=6)
+
+    def validate_pin(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("PIN must contain digits only.")
+        return value
+
+
+class PinVerifySerializer(serializers.Serializer):
+    pin = serializers.CharField(min_length=4, max_length=6)
+
+
+class FaceEnrollSerializer(serializers.Serializer):
+    face_image = serializers.CharField(help_text="Base64 encoded face image or data URI")
+
+
+class FaceVerifySerializer(serializers.Serializer):
+    face_image = serializers.CharField(help_text="Base64 encoded face image or data URI")
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
+    has_pin = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = UserProfile
         fields = [
             'id', 'bmoni_user_id', 'first_name', 'last_name',
             'email', 'phone_number', 'smart_wallet_id',
             'wallet_address', 'onboarding_complete', 'created_at',
+            'has_pin', 'face_enrolled',
         ]

@@ -31,7 +31,7 @@ class ApiService {
       }
     }
     list.addAll([
-      'https://nuru-bmoni.up.railway.app/api',
+      'https://nuru.up.railway.app/api',
       'http://localhost:8000/api',
       'http://127.0.0.1:8000/api',
       'http://10.0.2.2:8000/api',
@@ -42,7 +42,9 @@ class ApiService {
 
   /// Get active API base URL
   static Future<String> getBaseUrl() async {
-    if (_cachedUrl != null && _cachedUrl!.isNotEmpty) {
+    if (_cachedUrl != null &&
+        _cachedUrl!.isNotEmpty &&
+        !_cachedUrl!.contains('nuru-bmoni')) {
       return _cachedUrl!;
     }
 
@@ -57,12 +59,15 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString(_urlKey);
 
-    if (savedUrl != null && savedUrl.isNotEmpty) {
+    if (savedUrl != null &&
+        savedUrl.isNotEmpty &&
+        !savedUrl.contains('nuru-bmoni')) {
       _cachedUrl = savedUrl;
       return savedUrl;
     }
 
-    _cachedUrl = 'https://nuru-bmoni.up.railway.app/api';
+    _cachedUrl = 'https://nuru.up.railway.app/api';
+    await prefs.setString(_urlKey, _cachedUrl!);
     return _cachedUrl!;
   }
 
@@ -342,5 +347,60 @@ class ApiService {
     await prefs.setString(_currentUserIdKey, '');
     _cachedUrl = null;
     _cachedCurrentUserId = null;
+  }
+
+  // ─── 2FA Security: Transaction PIN & Face Recognition ──────────
+
+  /// Get 2FA security status (has_pin, face_enrolled)
+  static Future<Map<String, dynamic>> getSecurityStatus() async {
+    try {
+      final response = await _getWithFallback('/auth/security-status/');
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint('getSecurityStatus error: $e');
+    }
+    return {'has_pin': false, 'face_enrolled': false};
+  }
+
+  /// Create and hash initial transaction PIN
+  static Future<Map<String, dynamic>> setupTransactionPin(String pin) async {
+    final response = await _postWithFallback('/auth/pin/setup/', {'pin': pin});
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return data;
+    }
+    throw Exception(data['message'] ?? data['pin']?[0] ?? 'Failed to setup PIN');
+  }
+
+  /// Verify transaction PIN against stored hash
+  static Future<Map<String, dynamic>> verifyTransactionPin(String pin) async {
+    final response = await _postWithFallback('/auth/pin/verify/', {'pin': pin});
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return data;
+    }
+    throw Exception(data['message'] ?? 'Incorrect PIN');
+  }
+
+  /// Enroll reference face image for 2FA
+  static Future<Map<String, dynamic>> enrollFace(String base64Image) async {
+    final response = await _postWithFallback('/auth/face/enroll/', {'face_image': base64Image});
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return data;
+    }
+    throw Exception(data['message'] ?? 'Failed to enroll Face ID');
+  }
+
+  /// Verify live face image for 2FA
+  static Future<Map<String, dynamic>> verifyFace(String base64Image) async {
+    final response = await _postWithFallback('/auth/face/verify/', {'face_image': base64Image});
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return data;
+    }
+    throw Exception(data['message'] ?? 'Face verification failed');
   }
 }

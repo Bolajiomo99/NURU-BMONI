@@ -13,6 +13,11 @@ from .views import (
     BmoniLoginView,
     SeedDataView,
     TransactionsView,
+    SecurityStatusView,
+    PinSetupView,
+    PinVerifyView,
+    FaceEnrollView,
+    FaceVerifyView,
 )
 
 urlpatterns = [
@@ -22,6 +27,13 @@ urlpatterns = [
     path('explain/', ExplainView.as_view(), name='explain'),
     path('afford/', AffordabilityCheckView.as_view(), name='afford'),
     path('transactions/', TransactionsView.as_view(), name='transactions'),
+
+    # 2FA Security: PIN & Face Recognition
+    path('auth/security-status/', SecurityStatusView.as_view(), name='security-status'),
+    path('auth/pin/setup/', PinSetupView.as_view(), name='pin-setup'),
+    path('auth/pin/verify/', PinVerifyView.as_view(), name='pin-verify'),
+    path('auth/face/enroll/', FaceEnrollView.as_view(), name='face-enroll'),
+    path('auth/face/verify/', FaceVerifyView.as_view(), name='face-verify'),
 
     # Action endpoints
     path('action/transfer/', TransferActionView.as_view(), name='action-transfer'),

@@ -5,6 +5,7 @@ Tracks user financial profiles, transactions, and AI interactions.
 
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.hashers import make_password, check_password
 
 
 class UserProfile(models.Model):
@@ -20,6 +21,27 @@ class UserProfile(models.Model):
     smart_wallet_id = models.CharField(max_length=255, blank=True, default='')
     wallet_address = models.CharField(max_length=255, blank=True, default='')
     onboarding_complete = models.BooleanField(default=False)
+
+    # 2FA Security: Hashed Transaction PIN & Face Recognition
+    transaction_pin_hash = models.CharField(max_length=255, blank=True, default='')
+    face_enrolled = models.BooleanField(default=False)
+    face_image_data = models.TextField(blank=True, default='')
+
+    @property
+    def has_pin(self) -> bool:
+        """Check if user has created a transaction PIN."""
+        return bool(self.transaction_pin_hash)
+
+    def set_pin(self, raw_pin: str) -> None:
+        """Cryptographically hash and save the transaction PIN."""
+        self.transaction_pin_hash = make_password(str(raw_pin).strip())
+        self.save(update_fields=['transaction_pin_hash'])
+
+    def check_pin(self, raw_pin: str) -> bool:
+        """Validate raw PIN against the stored cryptographic hash."""
+        if not self.transaction_pin_hash:
+            return False
+        return check_password(str(raw_pin).strip(), self.transaction_pin_hash)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.bmoni_user_id})"
