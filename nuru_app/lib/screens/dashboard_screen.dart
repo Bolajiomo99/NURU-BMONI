@@ -699,13 +699,46 @@ class DashboardScreen extends ConsumerWidget {
                 storyAsync.when(
                   loading: () => const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(32.0),
-                      child: CircularProgressIndicator(color: NuruTheme.primary),
+                      padding: EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: NuruTheme.primary),
+                          SizedBox(height: 18),
+                          Text(
+                            'NURU is analyzing your cash flow and financial health...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: NuruTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  error: (err, st) => Text(
-                    'Could not generate story: $err',
-                    style: const TextStyle(color: NuruTheme.dangerRed),
+                  error: (err, st) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.info_outline, color: NuruTheme.dangerRed, size: 36),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Could not generate story right now: $err',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: NuruTheme.dangerRed, fontSize: 14),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => ref.refresh(explainStoryProvider),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Try Again'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   data: (storyData) {
                     final story = storyData['story'] ?? '';

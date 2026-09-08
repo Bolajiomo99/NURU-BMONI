@@ -32,7 +32,7 @@ class BmoniClient:
                 headers=self.headers,
                 json=data,
                 params=params,
-                timeout=30,
+                timeout=5,
             )
             logger.info(f"BMONI {method} {path} → {response.status_code}")
             if response.status_code >= 400:

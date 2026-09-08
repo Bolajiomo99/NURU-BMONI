@@ -266,7 +266,10 @@ def _total_spending_usd(queryset):
 
 def _get_balances_from_transactions(user):
     """Calculate running balances or fetch live BMONI balances if connected."""
-    if user.bmoni_user_id and user.bmoni_user_id != 'demo-user-001' and not user.bmoni_user_id.startswith('bmoni-0'):
+    if (
+        user.bmoni_user_id
+        and not user.bmoni_user_id.startswith(('demo', 'guest', 'mock', 'bmoni-'))
+    ):
         try:
             from .bmoni_client import BmoniClient
             client = BmoniClient()

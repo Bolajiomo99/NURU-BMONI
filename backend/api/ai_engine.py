@@ -20,10 +20,9 @@ def _get_client():
     return genai.Client(api_key=api_key)
 
 CANDIDATE_MODELS = [
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
+    'gemini-3.6-flash',
+    'gemini-3.7-flash',
+    'gemini-3.8-flash',
 ]
 
 def _generate_content_with_fallback(client, contents, config=None):
@@ -176,6 +175,32 @@ def explain_finances(user):
     """
     Generate a comprehensive "Explain My Money" financial story.
     """
+    # If no transactions yet, return friendly onboarding explanation instantly
+    if user.transactions.count() == 0:
+        return {
+            'story': (
+                "## Welcome to NURU!\n\n"
+                "You haven't made any transactions yet. As soon as you receive funds, send transfers, "
+                "or convert currencies, your personalized AI financial story, spending breakdowns, "
+                "and cash flow insights will be generated right here."
+            ),
+            'summary': {
+                'health_score': 0,
+                'health_status': 'Not Connected' if user.bmoni_user_id == 'guest-unauthenticated' else 'New Account',
+                'balances': {'usd': 0.0, 'ngn': 0.0, 'total_usd_equivalent': 0.0},
+                'this_month': {
+                    'income_usd': 0.0, 'income_ngn': 0.0,
+                    'spending_usd': 0.0, 'spending_ngn': 0.0,
+                    'net_usd': 0.0, 'net_ngn': 0.0,
+                },
+                'trends': {'income_change_pct': 0.0, 'spending_change_pct': 0.0},
+                'categories': [],
+                'safe_weekly_spend_usd': 0.0,
+                'currency_concentration': {'usd_pct': 0.0, 'ngn_pct': 0.0},
+                'recent_transactions': [],
+            },
+        }
+
     summary = get_financial_summary(user)
     context = _build_financial_context(user, summary)
 
@@ -200,7 +225,7 @@ Keep the total response under 300 words but make every word count.
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.7,
-                max_output_tokens=2048,
+                max_output_tokens=800,
             ),
         )
 

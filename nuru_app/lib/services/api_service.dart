@@ -121,51 +121,90 @@ class ApiService {
 
   /// Helper to execute GET with auto-fallback to alternate URLs if connection fails.
   /// Returns the response even for non-200 status codes so callers can handle them.
-  static Future<http.Response> _getWithFallback(String path) async {
+  static Future<http.Response> _getWithFallback(
+    String path, {
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
     final primary = await getBaseUrl();
-    final urls = {primary, ..._candidateUrls}.toList();
 
-    Object? lastException;
-    for (final base in urls) {
-      try {
-        final res = await http
-            .get(Uri.parse('$base$path'), headers: await _headers)
-            .timeout(const Duration(seconds: 10));
-        _cachedUrl = base;
-        return res;
-      } catch (e) {
-        lastException = e;
+    try {
+      final res = await http
+          .get(Uri.parse('$primary$path'), headers: await _headers)
+          .timeout(timeout);
+      _cachedUrl = primary;
+      return res;
+    } catch (e) {
+      if (primary.startsWith('https://') && '$e'.contains('TimeoutException')) {
+        throw Exception('Analysis is taking longer than expected. Please try again.');
       }
+
+      final urls = _candidateUrls.where((u) => u != primary).toList();
+      Object? lastException = e;
+      for (final base in urls) {
+        if (kIsWeb && primary.startsWith('https://') && base.startsWith('http://')) {
+          continue;
+        }
+        try {
+          final res = await http
+              .get(Uri.parse('$base$path'), headers: await _headers)
+              .timeout(const Duration(seconds: 5));
+          _cachedUrl = base;
+          return res;
+        } catch (err) {
+          lastException = err;
+        }
+      }
+      throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
     }
-    throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
   }
 
   /// Helper to execute POST with auto-fallback to alternate URLs if connection fails.
   /// Returns the response even for non-200 status codes so callers can
   /// handle 404, 400, 502, etc. — only network/socket errors trigger fallback.
-  static Future<http.Response> _postWithFallback(String path, Map<String, dynamic> body) async {
+  static Future<http.Response> _postWithFallback(
+    String path,
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     final primary = await getBaseUrl();
-    final urls = {primary, ..._candidateUrls}.toList();
 
-    Object? lastException;
-    for (final base in urls) {
-      try {
-        final res = await http
-            .post(
-              Uri.parse('$base$path'),
-              headers: await _headers,
-              body: jsonEncode(body),
-            )
-            .timeout(const Duration(seconds: 12));
-        // Server responded — cache this working URL and return immediately.
-        // Let the caller decide what to do with non-200 status codes.
-        _cachedUrl = base;
-        return res;
-      } catch (e) {
-        lastException = e;
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$primary$path'),
+            headers: await _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(timeout);
+      _cachedUrl = primary;
+      return res;
+    } catch (e) {
+      if (primary.startsWith('https://') && '$e'.contains('TimeoutException')) {
+        throw Exception('Request timed out. Please try again.');
       }
+
+      final urls = _candidateUrls.where((u) => u != primary).toList();
+      Object? lastException = e;
+      for (final base in urls) {
+        if (kIsWeb && primary.startsWith('https://') && base.startsWith('http://')) {
+          continue;
+        }
+        try {
+          final res = await http
+              .post(
+                Uri.parse('$base$path'),
+                headers: await _headers,
+                body: jsonEncode(body),
+              )
+              .timeout(const Duration(seconds: 5));
+          _cachedUrl = base;
+          return res;
+        } catch (err) {
+          lastException = err;
+        }
+      }
+      throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
     }
-    throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
   }
 
   /// Fetch dashboard summary
@@ -182,7 +221,11 @@ class ApiService {
 
   /// Send message to NURU AI
   static Future<ChatMessageItem> sendMessage(String message) async {
-    final response = await _postWithFallback('/chat/', {'message': message});
+    final response = await _postWithFallback(
+      '/chat/',
+      {'message': message},
+      timeout: const Duration(seconds: 25),
+    );
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -213,12 +256,15 @@ class ApiService {
 
   /// Generate Explain My Money story
   static Future<Map<String, dynamic>> explainFinances() async {
-    final response = await _getWithFallback('/explain/');
+    final response = await _getWithFallback(
+      '/explain/',
+      timeout: const Duration(seconds: 30),
+    );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to generate financial story');
+      throw Exception('Failed to generate financial story (${response.statusCode})');
     }
   }
 
