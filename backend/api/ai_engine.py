@@ -20,9 +20,9 @@ def _get_client():
     return genai.Client(api_key=api_key)
 
 CANDIDATE_MODELS = [
+    'gemini-3.8-flash',
     'gemini-3.6-flash',
     'gemini-3.7-flash',
-    'gemini-3.8-flash',
 ]
 
 def _generate_content_with_fallback(client, contents, config=None):

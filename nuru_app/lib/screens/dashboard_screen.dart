@@ -651,6 +651,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   void _showExplainBottomSheet(BuildContext context, WidgetRef ref) {
+    ref.invalidate(explainStoryProvider);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

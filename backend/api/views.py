@@ -58,6 +58,8 @@ def _get_current_user(request):
         user = UserProfile.objects.filter(bmoni_user_id=header_id).first()
         if user:
             return user
+        if header_id == 'demo-user-001':
+            return _get_demo_user()
 
     guest_user, _ = UserProfile.objects.get_or_create(
         bmoni_user_id='guest-unauthenticated',
