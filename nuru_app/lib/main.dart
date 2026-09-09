@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'theme/nuru_theme.dart';
-import 'screens/onboarding_screen.dart';
+import 'screens/bottom_nav_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +30,7 @@ class NuruApp extends StatelessWidget {
       title: 'NURU — AI Financial Copilot',
       debugShowCheckedModeBanner: false,
       theme: NuruTheme.darkTheme,
-      home: const OnboardingScreen(),
+      home: const BottomNavShell(),
     );
   }
 }

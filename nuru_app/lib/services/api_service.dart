@@ -30,13 +30,7 @@ class ApiService {
         list.add('$webOrigin/api');
       }
     }
-    list.addAll([
-      'https://nuru.up.railway.app/api',
-      'http://localhost:8000/api',
-      'http://127.0.0.1:8000/api',
-      'http://10.0.2.2:8000/api',
-      'http://192.168.43.33:8000/api',
-    ]);
+    list.add('https://nuru.up.railway.app/api');
     return list.toSet().toList();
   }
 
@@ -61,7 +55,11 @@ class ApiService {
 
     if (savedUrl != null &&
         savedUrl.isNotEmpty &&
-        !savedUrl.contains('nuru-bmoni')) {
+        !savedUrl.contains('nuru-bmoni') &&
+        !savedUrl.contains('192.168.') &&
+        !savedUrl.contains('localhost') &&
+        !savedUrl.contains('127.0.0.1') &&
+        !savedUrl.contains('10.0.2.2')) {
       _cachedUrl = savedUrl;
       return savedUrl;
     }
