@@ -178,8 +178,12 @@ def explain_finances(user):
     """
     if user.bmoni_user_id and user.bmoni_user_id != 'guest-unauthenticated' and user.transactions.count() == 0:
         try:
-            from .seed_data import seed_user_transactions
-            seed_user_transactions(user)
+            if user.bmoni_user_id == '43fc704e-bfd9-4ad3-8edf-b189453773b0':
+                from .seed_data import seed_samson_transactions
+                seed_samson_transactions(user)
+            else:
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
         except Exception:
             pass
 
@@ -227,15 +231,19 @@ Keep the total response under 300 words but make every word count.
 
     try:
         client = _get_client()
-        response = _generate_content_with_fallback(
-            client=client,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.7,
-                max_output_tokens=800,
-            ),
-        )
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                _generate_content_with_fallback,
+                client=client,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.7,
+                    max_output_tokens=600,
+                ),
+            )
+            response = future.result(timeout=6.5)
 
         return {
             'story': response.text,
@@ -243,19 +251,20 @@ Keep the total response under 300 words but make every word count.
         }
 
     except Exception as e:
-        logger.error(f"Gemini API error in explain_finances: {e}")
+        logger.warning(f"Gemini explain_finances fallback triggered: {e}")
         return {
             'story': _generate_fallback_story(summary),
             'summary': summary,
         }
 
 
-def get_ai_insight(user):
+def get_ai_insight(user, summary=None):
     """
     Generate a single-line AI insight for the dashboard.
     Fast, focused, and specific.
     """
-    summary = get_financial_summary(user)
+    if summary is None:
+        summary = get_financial_summary(user)
 
     prompt = f"""Based on this financial data, generate ONE concise insight (1-2 sentences max).
 Be specific with numbers and percentages. Do not use markdown formatting.
@@ -274,17 +283,22 @@ Respond with ONLY the insight text, nothing else."""
 
     try:
         client = _get_client()
-        response = _generate_content_with_fallback(
-            client=client,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.5,
-                max_output_tokens=150,
-            ),
-        )
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                _generate_content_with_fallback,
+                client=client,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.5,
+                    max_output_tokens=150,
+                ),
+            )
+            response = future.result(timeout=4.0)
+
         return response.text.strip()
     except Exception as e:
-        logger.error(f"Gemini insight error: {e}")
+        logger.warning(f"Gemini insight fallback triggered: {e}")
         # Fallback insight
         if summary['trends']['income_change_pct'] > 0:
             return f"Your income is {summary['trends']['income_change_pct']}% higher than last month. Your financial health is {summary['health_status'].lower()}."

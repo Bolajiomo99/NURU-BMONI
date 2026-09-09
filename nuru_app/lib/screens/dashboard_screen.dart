@@ -778,7 +778,6 @@ class DashboardScreen extends ConsumerWidget {
 }
 
   void _showExplainBottomSheet(BuildContext context, WidgetRef ref) {
-    ref.invalidate(explainStoryProvider);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -811,17 +810,27 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Row(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
-                        SizedBox(width: 10),
-                        Text(
-                          'Your Money Story',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: NuruTheme.textPrimary,
-                          ),
+                        const Row(
+                          children: [
+                            Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
+                            SizedBox(width: 10),
+                            Text(
+                              'Your Money Story',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: NuruTheme.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: NuruTheme.textSecondary, size: 20),
+                          tooltip: 'Regenerate Story',
+                          onPressed: () => sheetRef.refresh(explainStoryProvider),
                         ),
                       ],
                     ),

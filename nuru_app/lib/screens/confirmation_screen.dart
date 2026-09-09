@@ -145,7 +145,18 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
       }
     } catch (e) {
       final currency = action?.currency ?? 'USD';
-      _updatedBalanceText = currency.toUpperCase() == 'NGN' ? '₦139,900.00' : '\$2,205.55';
+      final currentDashboard = ref.read(dashboardProvider).asData?.value;
+      if (currentDashboard != null) {
+        if (currency.toUpperCase() == 'NGN') {
+          final remaining = (currentDashboard.balances.ngn - amount).clamp(0.0, double.infinity);
+          _updatedBalanceText = '₦${NumberFormat('#,##0.00').format(remaining)}';
+        } else {
+          final remaining = (currentDashboard.balances.usd - amount).clamp(0.0, double.infinity);
+          _updatedBalanceText = '\$${NumberFormat('#,##0.00').format(remaining)}';
+        }
+      } else {
+        _updatedBalanceText = 'Deducted';
+      }
     }
 
     if (mounted) {

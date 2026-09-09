@@ -127,7 +127,7 @@ class ApiService {
   /// Returns the response even for non-200 status codes so callers can handle them.
   static Future<http.Response> _getWithFallback(
     String path, {
-    Duration timeout = const Duration(seconds: 12),
+    Duration timeout = const Duration(seconds: 18),
   }) async {
     final primary = await getBaseUrl();
 
@@ -151,7 +151,7 @@ class ApiService {
         try {
           final res = await http
               .get(Uri.parse('$base$path'), headers: await _headers)
-              .timeout(const Duration(seconds: 5));
+              .timeout(const Duration(seconds: 12));
           _cachedUrl = base;
           return res;
         } catch (err) {
@@ -168,7 +168,7 @@ class ApiService {
   static Future<http.Response> _postWithFallback(
     String path,
     Map<String, dynamic> body, {
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 25),
   }) async {
     final primary = await getBaseUrl();
 
@@ -200,7 +200,7 @@ class ApiService {
                 headers: await _headers,
                 body: jsonEncode(body),
               )
-              .timeout(const Duration(seconds: 5));
+              .timeout(const Duration(seconds: 15));
           _cachedUrl = base;
           return res;
         } catch (err) {
@@ -213,7 +213,11 @@ class ApiService {
 
   /// Fetch dashboard summary
   static Future<DashboardData> fetchDashboard() async {
+    final url = await getBaseUrl();
+    final uid = await getCurrentUserId();
+    debugPrint('🔍 fetchDashboard URL: $url | userId: $uid');
     final response = await _getWithFallback('/dashboard/');
+    debugPrint('🔍 fetchDashboard code: ${response.statusCode} | body: ${response.body.substring(0, response.body.length > 300 ? 300 : response.body.length)}');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);

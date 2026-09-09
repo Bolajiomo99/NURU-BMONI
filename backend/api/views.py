@@ -65,11 +65,17 @@ def _get_current_user(request):
                     'email': 'samson.jabo@example.com',
                     'phone_number': '+2348000000001',
                     'onboarding_complete': True,
+                    'smart_wallet_id': '3e64d0ba-30d1-4277-b72e-a2d2464b9c19',
+                    'wallet_address': '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6',
                 }
             )
-            if user.transactions.count() == 0:
-                from .seed_data import seed_user_transactions
-                seed_user_transactions(user)
+            if not user.smart_wallet_id:
+                user.smart_wallet_id = '3e64d0ba-30d1-4277-b72e-a2d2464b9c19'
+                user.wallet_address = '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6'
+                user.save(update_fields=['smart_wallet_id', 'wallet_address'])
+            if user.transactions.count() == 0 or user.transactions.filter(currency='USD', description__contains='Upwork').exists():
+                from .seed_data import seed_samson_transactions
+                seed_samson_transactions(user, force_reset=True)
             return user
 
         if header_id == 'b49a5942-9506-41a1-8ca1-e4321f23ce0a':
@@ -162,7 +168,7 @@ class DashboardView(APIView):
             summary = get_financial_summary(user)
 
             try:
-                ai_insight = get_ai_insight(user)
+                ai_insight = get_ai_insight(user, summary=summary)
             except Exception as e:
                 logger.error(f"AI insight failed: {e}")
                 ai_insight = "Your financial health is stable. Keep spending within safe weekly thresholds."
@@ -536,8 +542,12 @@ class BmoniUserView(APIView):
 
             # Seed initial transactions if brand new profile
             if user.transactions.count() == 0:
-                from .seed_data import seed_user_transactions
-                seed_user_transactions(user)
+                if user.bmoni_user_id == '43fc704e-bfd9-4ad3-8edf-b189453773b0':
+                    from .seed_data import seed_samson_transactions
+                    seed_samson_transactions(user)
+                else:
+                    from .seed_data import seed_user_transactions
+                    seed_user_transactions(user)
 
             # Step 2: Nigeria BVN Onboarding if BVN supplied
             onboarding_res = None
@@ -804,7 +814,14 @@ class BmoniLoginView(APIView):
                 user.save()
 
             # Seed initial transactions if brand new user profile
-            if user.transactions.count() == 0:
+            if user.bmoni_user_id == '43fc704e-bfd9-4ad3-8edf-b189453773b0':
+                if not user.smart_account_address:
+                    user.smart_account_address = '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6'
+                    user.save(update_fields=['smart_account_address'])
+                if user.transactions.count() == 0 or user.transactions.filter(currency='USD').exists():
+                    from .seed_data import seed_samson_transactions
+                    seed_samson_transactions(user)
+            elif user.transactions.count() == 0:
                 from .seed_data import seed_user_transactions
                 seed_user_transactions(user)
 

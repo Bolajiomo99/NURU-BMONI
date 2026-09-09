@@ -13,7 +13,7 @@ from django.db.models import Sum, Q
 NGN_TO_USD_RATE = Decimal('0.00062')  # ~₦1,600 = $1
 
 
-def calculate_health_score(user, txns=None):
+def calculate_health_score(user, txns=None, balances=None):
     """
     Calculate a 0-100 financial health score based on:
     - Income stability (25 pts)
@@ -26,7 +26,19 @@ def calculate_health_score(user, txns=None):
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
 
-    if txns is not None:
+    if balances is not None:
+        usd_balance, ngn_balance = balances
+        if txns is not None:
+            txns_this_month = [t for t in txns if t.timestamp >= month_start]
+            txns_last_month = [t for t in txns if last_month_start <= t.timestamp < month_start]
+        else:
+            txns_this_month = user.transactions.filter(timestamp__gte=month_start)
+            txns_last_month = user.transactions.filter(timestamp__gte=last_month_start, timestamp__lt=month_start)
+        income_this = _total_income_usd_mem(txns_this_month) if txns is not None else _total_income_usd(txns_this_month)
+        income_last = _total_income_usd_mem(txns_last_month) if txns is not None else _total_income_usd(txns_last_month)
+        spending_this = _total_spending_usd_mem(txns_this_month) if txns is not None else _total_spending_usd(txns_this_month)
+        spending_last = _total_spending_usd_mem(txns_last_month) if txns is not None else _total_spending_usd(txns_last_month)
+    elif txns is not None:
         txns_this_month = [t for t in txns if t.timestamp >= month_start]
         txns_last_month = [t for t in txns if last_month_start <= t.timestamp < month_start]
         income_this = _total_income_usd_mem(txns_this_month)
@@ -151,9 +163,9 @@ def get_financial_summary(user):
     last_spending_usd = sum((t.amount for t in txns_last_month if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
 
     categories = get_spending_by_category(user, txns=all_txns)
-    health_score = calculate_health_score(user, txns=all_txns)
-
     usd_balance, ngn_balance = _get_balances_from_transactions(user, txns=all_txns)
+    health_score = calculate_health_score(user, txns=all_txns, balances=(usd_balance, ngn_balance))
+
     total_equiv = usd_balance + (ngn_balance * NGN_TO_USD_RATE)
 
     safe_weekly = _calculate_safe_weekly_spend(user, health_score, total_usd_equiv=total_equiv)
@@ -314,6 +326,62 @@ def _total_spending_usd(queryset):
     return usd + (ngn * NGN_TO_USD_RATE)
 
 
+def _parse_bmoni_balance_data(data):
+    """Accurately parse BMONI balance payload regardless of structure."""
+    usd_bal = Decimal('0')
+    ngn_bal = Decimal('0')
+    found = False
+
+    if isinstance(data, dict):
+        # Case A: nested balances list -> {'smartAccountAddress': '...', 'balances': [{'currency': 'NGN', 'balance': '0'}]}
+        balance_list = data.get('balances')
+        if isinstance(balance_list, list):
+            for item in balance_list:
+                curr = str(item.get('currency', '')).upper()
+                raw_amt = item.get('balance', item.get('amount', 0))
+                try:
+                    amt = Decimal(str(raw_amt))
+                except Exception:
+                    amt = Decimal('0')
+                if curr in ['USD', 'USDB', 'USDC']:
+                    usd_bal += amt
+                    found = True
+                elif curr in ['NGN', 'CNGN']:
+                    ngn_bal += amt
+                    found = True
+
+        # Case B: direct currency keys -> {'usd': 100, 'ngn': 50000}
+        if 'usd' in data or 'USD' in data:
+            try:
+                usd_bal = Decimal(str(data.get('usd', data.get('USD', 0))))
+                found = True
+            except Exception:
+                pass
+        if 'ngn' in data or 'NGN' in data:
+            try:
+                ngn_bal = Decimal(str(data.get('ngn', data.get('NGN', 0))))
+                found = True
+            except Exception:
+                pass
+
+    elif isinstance(data, list):
+        for item in data:
+            curr = str(item.get('currency', '')).upper()
+            raw_amt = item.get('balance', item.get('amount', 0))
+            try:
+                amt = Decimal(str(raw_amt))
+            except Exception:
+                amt = Decimal('0')
+            if curr in ['USD', 'USDB', 'USDC']:
+                usd_bal += amt
+                found = True
+            elif curr in ['NGN', 'CNGN']:
+                ngn_bal += amt
+                found = True
+
+    return usd_bal, ngn_bal, found
+
+
 def _get_balances_from_transactions(user, txns=None):
     """Calculate running balances or fetch live BMONI balances if connected."""
     if (
@@ -322,11 +390,32 @@ def _get_balances_from_transactions(user, txns=None):
         and user.transactions.count() == 0
     ):
         try:
-            from .seed_data import seed_user_transactions
-            seed_user_transactions(user)
+            if user.bmoni_user_id == '43fc704e-bfd9-4ad3-8edf-b189453773b0':
+                from .seed_data import seed_samson_transactions
+                seed_samson_transactions(user)
+            else:
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
         except Exception:
             pass
 
+    # 1. Calculate local ledger running balances from transactions
+    if txns is not None:
+        credits_usd = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
+        debits_usd = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
+        credits_ngn = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'NGN'), Decimal('0'))
+        debits_ngn = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'NGN'), Decimal('0'))
+    else:
+        all_txns = list(user.transactions.all())
+        credits_usd = sum((t.amount for t in all_txns if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
+        debits_usd = sum((t.amount for t in all_txns if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
+        credits_ngn = sum((t.amount for t in all_txns if t.transaction_type == 'credit' and t.currency == 'NGN'), Decimal('0'))
+        debits_ngn = sum((t.amount for t in all_txns if t.transaction_type == 'debit' and t.currency == 'NGN'), Decimal('0'))
+
+    ledger_usd = max(Decimal('0'), credits_usd - debits_usd)
+    ledger_ngn = max(Decimal('0'), credits_ngn - debits_ngn)
+
+    # 2. Check for live connected BMONI account
     if (
         user.bmoni_user_id
         and not user.bmoni_user_id.startswith(('demo', 'guest', 'mock', 'bmoni-'))
@@ -336,40 +425,21 @@ def _get_balances_from_transactions(user, txns=None):
             client = BmoniClient()
             res = client.get_balances(user.bmoni_user_id)
             if res.get('success') and res.get('data'):
-                data = res['data']
-                usd_bal = Decimal('0')
-                ngn_bal = Decimal('0')
-                if isinstance(data, list):
-                    for item in data:
-                        curr = str(item.get('currency', '')).upper()
-                        amt = Decimal(str(item.get('amount', 0)))
-                        if curr in ['USD', 'USDC']:
-                            usd_bal += amt
-                        elif curr in ['NGN', 'CNGN']:
-                            ngn_bal += amt
-                    if usd_bal > 0 or ngn_bal > 0:
-                        return (usd_bal, ngn_bal)
-                elif isinstance(data, dict):
-                    usd_bal = Decimal(str(data.get('usd', data.get('USD', 0))))
-                    ngn_bal = Decimal(str(data.get('ngn', data.get('NGN', 0))))
-                    if usd_bal > 0 or ngn_bal > 0:
-                        return (usd_bal, ngn_bal)
+                bmoni_usd, bmoni_ngn, found = _parse_bmoni_balance_data(res['data'])
+                if found and (bmoni_usd > 0 or bmoni_ngn > 0):
+                    # Factor in local outgoing transfer debits dispatched in NURU
+                    active_txns = txns if txns is not None else user.transactions.all()
+                    local_transfer_usd = sum((t.amount for t in active_txns if t.transaction_type == 'debit' and t.category == 'transfer_out' and t.currency == 'USD'), Decimal('0'))
+                    local_transfer_ngn = sum((t.amount for t in active_txns if t.transaction_type == 'debit' and t.category == 'transfer_out' and t.currency == 'NGN'), Decimal('0'))
+
+                    final_usd = max(Decimal('0'), bmoni_usd - local_transfer_usd)
+                    final_ngn = max(Decimal('0'), bmoni_ngn - local_transfer_ngn)
+                    return (final_usd, final_ngn)
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f"Error fetching live BMONI balances: {e}")
+            logging.getLogger(__name__).warning(f"Live BMONI balance fetch failed, using local ledger: {e}")
 
-    if txns is not None:
-        credits_usd = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
-        debits_usd = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
-        credits_ngn = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'NGN'), Decimal('0'))
-        debits_ngn = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'NGN'), Decimal('0'))
-        return (credits_usd - debits_usd, credits_ngn - debits_ngn)
-
-    credits_usd = _sum_by(user.transactions.all(), 'credit', 'USD')
-    debits_usd = _sum_by(user.transactions.all(), 'debit', 'USD')
-    credits_ngn = _sum_by(user.transactions.all(), 'credit', 'NGN')
-    debits_ngn = _sum_by(user.transactions.all(), 'debit', 'NGN')
-    return (credits_usd - debits_usd, credits_ngn - debits_ngn)
+    return (ledger_usd, ledger_ngn)
 
 
 def _calculate_safe_weekly_spend(user, health_score, total_usd_equiv=None):

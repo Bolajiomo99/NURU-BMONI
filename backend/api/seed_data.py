@@ -221,3 +221,143 @@ def seed_demo_data():
     )
 
     return seed_user_transactions(user, force_reset=True)
+
+
+def seed_samson_transactions(user, force_reset=False):
+    """Seed realistic Nigerian business & BMONI sandbox transactions for Samson Jabo."""
+    from .models import Transaction
+
+    if not force_reset and user.transactions.count() > 0:
+        return user
+
+    if force_reset:
+        user.transactions.all().delete()
+
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=9, minute=0, second=0, microsecond=0)
+
+    transactions = [
+        # This Month - Income
+        {
+            'description': 'Farmyn Produce Settlement',
+            'amount': Decimal('180000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'credit',
+            'category': 'business_income',
+            'timestamp': month_start + timedelta(hours=4),
+        },
+        {
+            'description': 'Ajortrust P2P Credit',
+            'amount': Decimal('45000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'credit',
+            'category': 'business_income',
+            'timestamp': month_start + timedelta(hours=14),
+        },
+        {
+            'description': 'Contract Services Payout',
+            'amount': Decimal('60000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'credit',
+            'category': 'freelance_income',
+            'timestamp': month_start + timedelta(days=1, hours=2),
+        },
+
+        # This Month - Debits (matching official BMONI Sandbox proposals)
+        {
+            'description': 'Farmyn escrow order',
+            'amount': Decimal('28000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'business_expense',
+            'timestamp': month_start + timedelta(days=1, hours=8),
+        },
+        {
+            'description': 'Ajortrust Phase 4 real sandbox P2P',
+            'amount': Decimal('1.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'transfer_out',
+            'timestamp': month_start + timedelta(days=2, hours=1),
+        },
+        {
+            'description': 'Farmyn escrow order',
+            'amount': Decimal('28000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'business_expense',
+            'timestamp': month_start + timedelta(days=2, hours=5),
+        },
+        {
+            'description': 'Food & groceries - Shoprite',
+            'amount': Decimal('25000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'food',
+            'timestamp': month_start + timedelta(days=2, hours=9),
+        },
+        {
+            'description': 'Fuel & logistics',
+            'amount': Decimal('15000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'transport',
+            'timestamp': month_start + timedelta(days=2, hours=12),
+        },
+        {
+            'description': 'Internet subscription - Spectranet',
+            'amount': Decimal('12000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'utilities',
+            'timestamp': month_start + timedelta(days=2, hours=15),
+        },
+        {
+            'description': 'Electricity - IKEDC prepaid',
+            'amount': Decimal('8000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'utilities',
+            'timestamp': month_start + timedelta(days=2, hours=18),
+        },
+
+        # Last Month - Trends baseline
+        {
+            'description': 'Farmyn Harvest Settlement',
+            'amount': Decimal('220000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'credit',
+            'category': 'business_income',
+            'timestamp': month_start - timedelta(days=15),
+        },
+        {
+            'description': 'Farmyn agricultural supply',
+            'amount': Decimal('50000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'business_expense',
+            'timestamp': month_start - timedelta(days=12),
+        },
+        {
+            'description': 'Logistics & equipment repair',
+            'amount': Decimal('30000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'business_expense',
+            'timestamp': month_start - timedelta(days=7),
+        },
+        {
+            'description': 'Household supplies & groceries',
+            'amount': Decimal('25000.00'),
+            'currency': 'NGN',
+            'transaction_type': 'debit',
+            'category': 'food',
+            'timestamp': month_start - timedelta(days=4),
+        },
+    ]
+
+    for txn_data in transactions:
+        Transaction.objects.create(user=user, **txn_data)
+
+    print(f"Seeded {len(transactions)} Nigerian transactions for Samson Jabo ({user.bmoni_user_id})")
+    return user
