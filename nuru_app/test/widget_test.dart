@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:nuru_app/main.dart';
 import 'package:nuru_app/providers/auth_provider.dart';
-import 'package:nuru_app/routes/app_routes.dart';
+import 'package:nuru_app/services/onboarding_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// GoalsScreen calls getGoals() on mount — a plain empty-list stand-in so
+/// this test never makes a real network call.
+final _emptyOnboardingApi = OnboardingApi(
+  client: MockClient((request) async => http.Response('{"goals": []}', 200)),
+);
 
 void main() {
   setUp(() {
@@ -64,6 +72,7 @@ void main() {
               onboardingStep: 'goals',
             ),
           ),
+          onboardingApiProvider.overrideWithValue(_emptyOnboardingApi),
         ],
         child: const NuruApp(),
       ),
@@ -73,7 +82,9 @@ void main() {
     await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();
 
-    expect(find.text(AppRoutes.onboardingGoals), findsWidgets);
+    // GoalsScreen is built now (CP6) — assert its content directly rather
+    // than the CP6-placeholder's route-name text.
+    expect(find.text('What are you working toward?'), findsOneWidget);
   });
 
   testWidgets('a fully onboarded user goes straight to the dashboard',

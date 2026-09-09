@@ -68,6 +68,5 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = [
             'id', 'user_id', 'bmoni_user_id', 'first_name', 'last_name',
-            # onboarding_complete is dropped in 0006, with the client change.
-            'email', 'phone_number', 'onboarding_complete', 'created_at',
+            'email', 'phone_number', 'created_at',
         ]

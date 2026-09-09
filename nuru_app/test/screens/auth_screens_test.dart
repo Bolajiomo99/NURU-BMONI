@@ -224,7 +224,9 @@ void main() {
       await tester.enterText(find.byType(TextField).first, '123456');
       await tester.pumpAndSettle();
 
-      expect(find.text(AppRoutes.onboardingBusiness), findsWidgets);
+      // BusinessScreen is built now (CP6) — assert its content directly
+      // rather than the CP6-placeholder's route-name text.
+      expect(find.text('Tell us about your business'), findsOneWidget);
     });
 
     testWidgets('an incorrect code shows the attempts-remaining message and clears the boxes',

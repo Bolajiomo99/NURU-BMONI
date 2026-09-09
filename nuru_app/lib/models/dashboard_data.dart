@@ -3,16 +3,12 @@ class UserInfo {
   final String lastName;
   final String email;
   final String phoneNumber;
-  final String bmoniUserId;
-  final bool onboardingComplete;
 
   UserInfo({
     required this.firstName,
     required this.lastName,
     required this.email,
     required this.phoneNumber,
-    required this.bmoniUserId,
-    required this.onboardingComplete,
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
@@ -21,8 +17,6 @@ class UserInfo {
       lastName: json['last_name'] ?? '',
       email: json['email'] ?? '',
       phoneNumber: json['phone_number'] ?? '',
-      bmoniUserId: json['bmoni_user_id'] ?? '',
-      onboardingComplete: json['onboarding_complete'] ?? false,
     );
   }
 }

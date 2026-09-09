@@ -80,10 +80,6 @@ class UserProfile(models.Model):
     phone_number = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # TODO(0006): dropped alongside the Flutter/dashboard change that stops
-    # reading it. Nothing writes it any more now that BMONI onboarding is gone.
-    onboarding_complete = models.BooleanField(default=False)
-
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.bmoni_user_id})"
 

@@ -7,6 +7,9 @@ import '../screens/auth/otp_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/bottom_nav_shell.dart';
+import '../screens/onboarding/business_screen.dart';
+import '../screens/onboarding/connect_screen.dart';
+import '../screens/onboarding/goals_screen.dart';
 import '../screens/splash_screen.dart';
 
 /// Named routes for the app.
@@ -90,10 +93,9 @@ Map<String, WidgetBuilder> buildRoutes() {
     AppRoutes.forgotPassword: (_) => const ForgotPasswordScreen(),
     AppRoutes.resetPassword: (_) => const ResetPasswordScreen(),
 
-    // CP6
-    AppRoutes.onboardingBusiness: (_) => const _Placeholder(AppRoutes.onboardingBusiness),
-    AppRoutes.onboardingGoals: (_) => const _Placeholder(AppRoutes.onboardingGoals),
-    AppRoutes.onboardingConnect: (_) => const _Placeholder(AppRoutes.onboardingConnect),
+    AppRoutes.onboardingBusiness: (_) => const BusinessScreen(),
+    AppRoutes.onboardingGoals: (_) => const GoalsScreen(),
+    AppRoutes.onboardingConnect: (_) => const ConnectScreen(),
   };
 }
 

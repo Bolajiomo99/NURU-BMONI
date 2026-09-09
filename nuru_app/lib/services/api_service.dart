@@ -5,26 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_data.dart';
 import '../models/chat_message.dart';
 
-/// Thrown when a BMONI login lookup (by user ID or phone) comes back 404 -
-/// distinct from a network/server error so the UI can show the
-/// "no BMONI account found" state instead of a generic failure toast.
-class BmoniAccountNotFoundException implements Exception {
-  final String message;
-  BmoniAccountNotFoundException(this.message);
-  @override
-  String toString() => message;
-}
-
 class ApiService {
   static const String _urlKey = 'nuru_backend_api_url';
-  static const String _currentUserIdKey = 'nuru_current_bmoni_user_id';
 
   /// Shared with AuthApi — both read and write the same key so a login
   /// performed through either path authenticates the other.
   static const String authTokenKey = 'nuru_auth_token';
 
   static String? _cachedUrl;
-  static String? _cachedCurrentUserId;
   static String? _cachedAuthToken;
 
   /// Candidate URLs to test if primary fails
@@ -91,23 +79,6 @@ class ApiService {
     debugPrint('⚙️ Updated NURU backend URL to: $formatted');
   }
 
-  /// The bmoni_user_id of whoever last logged in via [loginBmoniUser], sent
-  /// on every subsequent request so the backend knows who "current user"
-  /// means. Null before any real login - the backend then falls back to
-  /// its seeded demo persona.
-  static Future<String?> getCurrentUserId() async {
-    if (_cachedCurrentUserId != null) return _cachedCurrentUserId;
-    final prefs = await SharedPreferences.getInstance();
-    _cachedCurrentUserId = prefs.getString(_currentUserIdKey);
-    return _cachedCurrentUserId;
-  }
-
-  static Future<void> _setCurrentUserId(String bmoniUserId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_currentUserIdKey, bmoniUserId);
-    _cachedCurrentUserId = bmoniUserId;
-  }
-
   /// The DRF auth token for the signed-in account, or null when signed out.
   static Future<String?> getAuthToken() async {
     if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
@@ -139,12 +110,6 @@ class ApiService {
     final token = await getAuthToken();
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Token $token';
-    }
-    // Legacy identity, read-only server-side and only consulted when there is
-    // no token. Retained for the seeded demo profile.
-    final userId = await getCurrentUserId();
-    if (userId != null && userId.isNotEmpty) {
-      headers['X-Bmoni-User-Id'] = userId;
     }
     return headers;
   }
@@ -298,86 +263,12 @@ class ApiService {
     }
   }
 
-  /// Register / Connect BMONI Account & Perform BVN Onboarding
-  static Future<Map<String, dynamic>> registerBmoniUser({
-    required String firstName,
-    required String lastName,
-    required String email,
-    required String phoneNumber,
-    required String bvn,
-  }) async {
-    final response = await _postWithFallback('/bmoni/user/', {
-      'first_name': firstName,
-      'last_name': lastName,
-      'email': email,
-      'phone_number': phoneNumber,
-      'bvn': bvn,
-    });
-
-    Map<String, dynamic> jsonBody = {};
-    try {
-      if (response.body.trim().startsWith('{')) {
-        jsonBody = jsonDecode(response.body);
-      }
-    } catch (_) {}
-
-    if (response.statusCode == 200) {
-      final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
-      if (resolvedId != null && resolvedId.isNotEmpty) {
-        await _setCurrentUserId(resolvedId);
-      }
-      return jsonBody;
-    } else {
-      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Registration could not be completed. Please try again.';
-      throw Exception(msg);
-    }
-  }
-
-  /// Connect / Log in existing BMONI user using Phone Number, Email, Name, or BMONI User ID
-  static Future<Map<String, dynamic>> loginBmoniUser({
-    String? identifier,
-    String? bmoniUserId,
-    String? phoneNumber,
-  }) async {
-    final input = identifier ?? bmoniUserId ?? phoneNumber ?? '';
-    final response = await _postWithFallback('/bmoni/login/', {
-      'identifier': input,
-      'bmoni_user_id': bmoniUserId ?? '',
-      'phone_number': phoneNumber ?? '',
-    });
-
-    Map<String, dynamic> jsonBody = {};
-    try {
-      if (response.body.trim().startsWith('{')) {
-        jsonBody = jsonDecode(response.body);
-      }
-    } catch (_) {}
-
-    if (response.statusCode == 200) {
-      final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
-      if (resolvedId != null && resolvedId.isNotEmpty) {
-        await _setCurrentUserId(resolvedId);
-      }
-      return jsonBody;
-    } else if (response.statusCode == 404) {
-      throw BmoniAccountNotFoundException(
-        jsonBody['message'] as String? ??
-            'No BMONI account found for that phone number, email, or identifier.',
-      );
-    } else {
-      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Login failed. Please try again.';
-      throw Exception(msg);
-    }
-  }
-
   /// Reset session context back to unauthenticated guest mode and clear cached URLs
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_urlKey);
     await prefs.remove(authTokenKey);
-    await prefs.setString(_currentUserIdKey, '');
     _cachedUrl = null;
-    _cachedCurrentUserId = null;
     _cachedAuthToken = null;
   }
 }
