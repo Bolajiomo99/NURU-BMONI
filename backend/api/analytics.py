@@ -318,6 +318,17 @@ def _get_balances_from_transactions(user, txns=None):
     """Calculate running balances or fetch live BMONI balances if connected."""
     if (
         user.bmoni_user_id
+        and user.bmoni_user_id != 'guest-unauthenticated'
+        and user.transactions.count() == 0
+    ):
+        try:
+            from .seed_data import seed_user_transactions
+            seed_user_transactions(user)
+        except Exception:
+            pass
+
+    if (
+        user.bmoni_user_id
         and not user.bmoni_user_id.startswith(('demo', 'guest', 'mock', 'bmoni-'))
     ):
         try:

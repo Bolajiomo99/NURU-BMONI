@@ -9,22 +9,15 @@ from datetime import timedelta
 from django.utils import timezone
 
 
-def seed_demo_data():
-    """Seed the database with a realistic demo profile and transaction history."""
-    from .models import UserProfile, Transaction
+def seed_user_transactions(user, force_reset=False):
+    """Seed or re-seed realistic transaction history for any user profile."""
+    from .models import Transaction
 
-    # Clear existing demo data
-    UserProfile.objects.filter(email='bolaji@nuru.demo').delete()
+    if not force_reset and user.transactions.count() > 0:
+        return user
 
-    # Create demo user
-    user = UserProfile.objects.create(
-        bmoni_user_id='demo-user-001',
-        first_name='Bolaji',
-        last_name='Omo',
-        email='bolaji@nuru.demo',
-        phone_number='+2348000000000',
-        onboarding_complete=True,
-    )
+    if force_reset:
+        user.transactions.all().delete()
 
     now = timezone.now()
     # Anchor all "this month" transactions from the 1st of the current month
@@ -208,3 +201,23 @@ def seed_demo_data():
 
     print(f"Seeded {len(transactions)} transactions for {user.first_name} {user.last_name}")
     return user
+
+
+def seed_demo_data():
+    """Seed the database with a realistic demo profile and transaction history."""
+    from .models import UserProfile
+
+    # Clear existing demo data
+    UserProfile.objects.filter(email='bolaji@nuru.demo').delete()
+
+    # Create demo user
+    user = UserProfile.objects.create(
+        bmoni_user_id='demo-user-001',
+        first_name='Bolaji',
+        last_name='Omo',
+        email='bolaji@nuru.demo',
+        phone_number='+2348000000000',
+        onboarding_complete=True,
+    )
+
+    return seed_user_transactions(user, force_reset=True)

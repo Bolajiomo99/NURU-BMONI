@@ -175,7 +175,14 @@ def explain_finances(user):
     """
     Generate a comprehensive "Explain My Money" financial story.
     """
-    # If no transactions yet, return friendly onboarding explanation instantly
+    if user.bmoni_user_id and user.bmoni_user_id != 'guest-unauthenticated' and user.transactions.count() == 0:
+        try:
+            from .seed_data import seed_user_transactions
+            seed_user_transactions(user)
+        except Exception:
+            pass
+
+    # If guest or genuinely no transactions, return friendly onboarding explanation instantly
     if user.transactions.count() == 0:
         return {
             'story': (

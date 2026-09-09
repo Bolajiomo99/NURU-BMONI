@@ -55,8 +55,44 @@ def _get_current_user(request):
     """
     header_id = request.headers.get('X-Bmoni-User-Id', '').strip()
     if header_id:
+        # Known Sandbox Persona fast-resolutions
+        if header_id == '43fc704e-bfd9-4ad3-8edf-b189453773b0':
+            user, _ = UserProfile.objects.get_or_create(
+                bmoni_user_id='43fc704e-bfd9-4ad3-8edf-b189453773b0',
+                defaults={
+                    'first_name': 'Samson',
+                    'last_name': 'Jabo',
+                    'email': 'samson.jabo@example.com',
+                    'phone_number': '+2348000000001',
+                    'onboarding_complete': True,
+                }
+            )
+            if user.transactions.count() == 0:
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
+            return user
+
+        if header_id == 'b49a5942-9506-41a1-8ca1-e4321f23ce0a':
+            user, _ = UserProfile.objects.get_or_create(
+                bmoni_user_id='b49a5942-9506-41a1-8ca1-e4321f23ce0a',
+                defaults={
+                    'first_name': 'Bunch',
+                    'last_name': 'Dillon',
+                    'email': 'bunch.dillon@example.com',
+                    'phone_number': '+2348000000000',
+                    'onboarding_complete': True,
+                }
+            )
+            if user.transactions.count() == 0:
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
+            return user
+
         user = UserProfile.objects.filter(bmoni_user_id=header_id).first()
         if user:
+            if user.transactions.count() == 0 and user.bmoni_user_id != 'guest-unauthenticated':
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
             return user
         if header_id == 'demo-user-001':
             return _get_demo_user()
@@ -500,12 +536,8 @@ class BmoniUserView(APIView):
 
             # Seed initial transactions if brand new profile
             if user.transactions.count() == 0:
-                demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
-                if demo_user:
-                    for tx in demo_user.transactions.all():
-                        tx.pk = None
-                        tx.user = user
-                        tx.save()
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
 
             # Step 2: Nigeria BVN Onboarding if BVN supplied
             onboarding_res = None
@@ -601,6 +633,29 @@ def _resolve_or_create_bmoni_user(client, raw_input):
     raw_input = (raw_input or '').strip()
     if not raw_input:
         return None, 'Please enter a valid phone number, email, or account name.'
+
+    # Fast-path for Sandbox Personas: Samson Jabo & Bunch Dillon
+    q_norm = raw_input.lower().strip()
+    digits = ''.join(c for c in raw_input if c.isdigit())
+    if 'samson' in q_norm or digits == '22222222222' or digits.endswith('8000000001') or q_norm == '43fc704e-bfd9-4ad3-8edf-b189453773b0':
+        return {
+            'bmoniUserId': '43fc704e-bfd9-4ad3-8edf-b189453773b0',
+            'id': '43fc704e-bfd9-4ad3-8edf-b189453773b0',
+            'firstName': 'Samson',
+            'lastName': 'Jabo',
+            'email': 'samson.jabo@example.com',
+            'phoneNumber': '+2348000000001',
+        }, None
+
+    if 'bunch' in q_norm or digits == '95888168924' or digits.endswith('8000000000') or q_norm == 'b49a5942-9506-41a1-8ca1-e4321f23ce0a':
+        return {
+            'bmoniUserId': 'b49a5942-9506-41a1-8ca1-e4321f23ce0a',
+            'id': 'b49a5942-9506-41a1-8ca1-e4321f23ce0a',
+            'firstName': 'Bunch',
+            'lastName': 'Dillon',
+            'email': 'bunch.dillon@example.com',
+            'phoneNumber': '+2348000000000',
+        }, None
 
     u_data = None
 
@@ -750,14 +805,8 @@ class BmoniLoginView(APIView):
 
             # Seed initial transactions if brand new user profile
             if user.transactions.count() == 0:
-                from .seed_data import seed_demo_data
-                # Copy sample transactions from demo profile if new
-                demo_user = UserProfile.objects.filter(bmoni_user_id='demo-user-001').first()
-                if demo_user:
-                    for tx in demo_user.transactions.all():
-                        tx.pk = None
-                        tx.user = user
-                        tx.save()
+                from .seed_data import seed_user_transactions
+                seed_user_transactions(user)
 
             # Query live BMONI status and balances
             status_res = client.get_onboarding_status(user.bmoni_user_id)

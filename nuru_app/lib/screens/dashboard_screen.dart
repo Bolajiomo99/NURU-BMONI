@@ -209,211 +209,341 @@ class DashboardScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: NuruTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: NuruTheme.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-                      child: const Icon(
-                        Icons.shield_rounded,
-                        color: NuruTheme.primary,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'BMONI Account & BVN',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: NuruTheme.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'Register new user or log in with live BMONI ID',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: NuruTheme.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Segmented tab toggle
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: NuruTheme.surfaceLight,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => activeTab = 0),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: activeTab == 0 ? NuruTheme.surfaceElevated : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'New Signup',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: activeTab == 0 ? NuruTheme.textPrimary : NuruTheme.textMuted,
-                                ),
-                              ),
-                            ),
+        builder: (context, setState) {
+          Future<void> switchPersona({
+            required String firstName,
+            required String lastName,
+            required String email,
+            required String phoneNumber,
+            required String bvn,
+          }) async {
+            firstNameCtrl.text = firstName;
+            lastNameCtrl.text = lastName;
+            emailCtrl.text = email;
+            phoneCtrl.text = phoneNumber;
+            bvnCtrl.text = bvn;
+            HapticFeedback.mediumImpact();
+            setState(() => isLoading = true);
+            try {
+              await ApiService.registerBmoniUser(
+                firstName: firstName,
+                lastName: lastName,
+                email: email,
+                phoneNumber: phoneNumber,
+                bvn: bvn,
+              );
+              if (context.mounted) {
+                Navigator.pop(context);
+                ref.invalidate(dashboardProvider);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Colors.white),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Active Account: $firstName $lastName (Verified)!',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
+                      ],
+                    ),
+                    backgroundColor: NuruTheme.healthyGreen,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                );
+              }
+            } catch (e) {
+              setState(() => isLoading = false);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Persona switch failed: $e'),
+                    backgroundColor: NuruTheme.dangerRed,
+                  ),
+                );
+              }
+            }
+          }
+
+          final isBunch = user.firstName.toLowerCase() == 'bunch';
+          final isSamson = user.firstName.toLowerCase() == 'samson';
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: NuruTheme.surfaceElevated,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => activeTab = 1),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: activeTab == 1 ? NuruTheme.surfaceElevated : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Existing BMONI ID',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: activeTab == 1 ? NuruTheme.textPrimary : NuruTheme.textMuted,
-                                ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: NuruTheme.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: const Icon(
+                          Icons.shield_rounded,
+                          color: NuruTheme.primary,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'BMONI Account & BVN',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: NuruTheme.textPrimary,
                               ),
                             ),
-                          ),
+                            Text(
+                              'Register new user or switch test personas',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: NuruTheme.textMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                if (activeTab == 0) ...[
+                  const SizedBox(height: 16),
+                  // Segmented tab toggle
                   Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: NuruTheme.surfaceLight,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: NuruTheme.primary.withValues(alpha: 0.3)),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.science_rounded, size: 16, color: NuruTheme.primary),
-                            SizedBox(width: 6),
-                            Text(
-                              'BMONI Sandbox Test Personas',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: NuruTheme.primary,
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => activeTab = 0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: activeTab == 0 ? NuruTheme.surfaceElevated : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Test Personas / Signup',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: activeTab == 0 ? NuruTheme.textPrimary : NuruTheme.textMuted,
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () {
-                                  firstNameCtrl.text = 'Bunch';
-                                  lastNameCtrl.text = 'Dillon';
-                                  phoneCtrl.text = '08000000000';
-                                  emailCtrl.text = 'bunch.dillon@example.com';
-                                  bvnCtrl.text = '95888168924';
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: NuruTheme.surfaceElevated,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: NuruTheme.surfaceLight),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'Bunch Dillon\n(BVN: 95888168924)',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 11, color: NuruTheme.textPrimary, fontWeight: FontWeight.w600),
-                                    ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => activeTab = 1),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: activeTab == 1 ? NuruTheme.surfaceElevated : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Existing BMONI ID',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: activeTab == 1 ? NuruTheme.textPrimary : NuruTheme.textMuted,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () {
-                                  firstNameCtrl.text = 'Samson';
-                                  lastNameCtrl.text = 'Jabo';
-                                  phoneCtrl.text = '08000000001';
-                                  emailCtrl.text = 'samson.jabo@example.com';
-                                  bvnCtrl.text = '22222222222';
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: NuruTheme.surfaceElevated,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: NuruTheme.surfaceLight),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'Samson Jabo\n(BVN: 22222222222)',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 11, color: NuruTheme.textPrimary, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  if (activeTab == 0) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: NuruTheme.surfaceLight,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: NuruTheme.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.science_rounded, size: 16, color: NuruTheme.primary),
+                              SizedBox(width: 6),
+                              Text(
+                                'BMONI Sandbox Test Personas (1-Tap Switch)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: NuruTheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: isLoading
+                                      ? null
+                                      : () => switchPersona(
+                                            firstName: 'Bunch',
+                                            lastName: 'Dillon',
+                                            phoneNumber: '08000000000',
+                                            email: 'bunch.dillon@example.com',
+                                            bvn: '95888168924',
+                                          ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      color: isBunch ? NuruTheme.healthyGreen.withValues(alpha: 0.15) : NuruTheme.surfaceElevated,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isBunch ? NuruTheme.healthyGreen : NuruTheme.surfaceLight,
+                                        width: isBunch ? 1.5 : 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              'Bunch Dillon',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isBunch ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            if (isBunch) ...[
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.check_circle_rounded, size: 13, color: NuruTheme.healthyGreen),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        const Text(
+                                          'BVN: 95888168924',
+                                          style: TextStyle(fontSize: 10, color: NuruTheme.textMuted),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          isBunch ? '● Active' : 'Tap to Switch',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: isBunch ? NuruTheme.healthyGreen : NuruTheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: isLoading
+                                      ? null
+                                      : () => switchPersona(
+                                            firstName: 'Samson',
+                                            lastName: 'Jabo',
+                                            phoneNumber: '08000000001',
+                                            email: 'samson.jabo@example.com',
+                                            bvn: '22222222222',
+                                          ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      color: isSamson ? NuruTheme.healthyGreen.withValues(alpha: 0.15) : NuruTheme.surfaceElevated,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isSamson ? NuruTheme.healthyGreen : NuruTheme.surfaceLight,
+                                        width: isSamson ? 1.5 : 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              'Samson Jabo',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isSamson ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            if (isSamson) ...[
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.check_circle_rounded, size: 13, color: NuruTheme.healthyGreen),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        const Text(
+                                          'BVN: 22222222222',
+                                          style: TextStyle(fontSize: 10, color: NuruTheme.textMuted),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          isSamson ? '● Active' : 'Tap to Switch',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: isSamson ? NuruTheme.healthyGreen : NuruTheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   TextField(
                     controller: firstNameCtrl,
                     style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
@@ -645,10 +775,11 @@ class DashboardScreen extends ConsumerWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
 
   void _showExplainBottomSheet(BuildContext context, WidgetRef ref) {
     ref.invalidate(explainStoryProvider);
@@ -659,116 +790,124 @@ class DashboardScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        maxChildSize: 0.9,
-        minChildSize: 0.5,
-        expand: false,
-        builder: (context, scrollController) {
-          final storyAsync = ref.watch(explainStoryProvider);
-          return Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: ListView(
-              controller: scrollController,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: NuruTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Row(
+      builder: (context) => Consumer(
+        builder: (context, sheetRef, _) {
+          final storyAsync = sheetRef.watch(explainStoryProvider);
+          return DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            maxChildSize: 0.9,
+            minChildSize: 0.5,
+            expand: false,
+            builder: (context, scrollController) {
+              return Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: ListView(
+                  controller: scrollController,
                   children: [
-                    Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
-                    SizedBox(width: 10),
-                    Text(
-                      'Your Money Story',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: NuruTheme.textPrimary,
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: NuruTheme.surfaceElevated,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                storyAsync.when(
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircularProgressIndicator(color: NuruTheme.primary),
-                          SizedBox(height: 18),
-                          Text(
-                            'NURU is analyzing your cash flow and financial health...',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: NuruTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  error: (err, st) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.info_outline, color: NuruTheme.dangerRed, size: 36),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Could not generate story right now: $err',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: NuruTheme.dangerRed, fontSize: 14),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () => ref.refresh(explainStoryProvider),
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Try Again'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  data: (storyData) {
-                    final story = storyData['story'] ?? '';
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 20),
+                    const Row(
                       children: [
+                        Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
+                        SizedBox(width: 10),
                         Text(
-                          story,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            height: 1.7,
+                          'Your Money Story',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
                             color: NuruTheme.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 28),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Close'),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    storyAsync.when(
+                      loading: () => const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(color: NuruTheme.primary),
+                              SizedBox(height: 18),
+                              Text(
+                                'NURU is analyzing your cash flow and financial health...',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: NuruTheme.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    );
-                  },
+                      ),
+                      error: (err, st) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.info_outline, color: NuruTheme.dangerRed, size: 36),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Could not generate story right now: $err',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: NuruTheme.dangerRed, fontSize: 14),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: () => sheetRef.refresh(explainStoryProvider),
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: const Text('Try Again'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      data: (storyData) {
+                        final story = storyData['story'] ?? '';
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              story,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                height: 1.7,
+                                color: NuruTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: NuruTheme.surfaceElevated,
+                                  foregroundColor: NuruTheme.textPrimary,
+                                ),
+                                child: const Text('Got it, thanks!'),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
@@ -942,46 +1081,62 @@ class _Header extends StatelessWidget {
 
     return Row(
       children: [
-        Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            gradient: NuruTheme.primaryGradient,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Center(
-            child: Text(
-              initials.toUpperCase(),
-              style: const TextStyle(
-                color: Color(0xFF0A0E1A),
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
+        GestureDetector(
+          onTap: onBmoniSignup,
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              gradient: NuruTheme.primaryGradient,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Center(
+              child: Text(
+                initials.toUpperCase(),
+                style: const TextStyle(
+                  color: Color(0xFF0A0E1A),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                greeting,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: NuruTheme.textMuted,
+          child: GestureDetector(
+            onTap: onBmoniSignup,
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  greeting,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: NuruTheme.textMuted,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                user.firstName,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: NuruTheme.textPrimary,
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        user.firstName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: NuruTheme.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: NuruTheme.textMuted),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         GestureDetector(
