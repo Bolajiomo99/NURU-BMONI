@@ -14,8 +14,7 @@ class AuthApi {
 
   AuthApi({http.Client? client}) : _client = client ?? http.Client();
 
-  Future<Uri> _uri(String path) async =>
-      Uri.parse('${await ApiService.getBaseUrl()}$path');
+  Uri _uri(String path) => Uri.parse('${ApiService.baseUrl}$path');
 
   static const Map<String, String> _jsonHeaders = {
     'Content-Type': 'application/json',
@@ -26,7 +25,7 @@ class AuthApi {
     late final http.Response res;
     try {
       res = await _client
-          .post(await _uri(path), headers: _jsonHeaders, body: jsonEncode(body))
+          .post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body))
           .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const AuthException(
@@ -140,7 +139,7 @@ class AuthApi {
 
     try {
       final res = await _client.get(
-        await _uri('/auth/me/'),
+        _uri('/auth/me/'),
         headers: {..._jsonHeaders, 'Authorization': 'Token $token'},
       ).timeout(const Duration(seconds: 10));
 

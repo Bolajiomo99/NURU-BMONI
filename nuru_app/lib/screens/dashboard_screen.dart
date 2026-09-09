@@ -19,7 +19,6 @@ class DashboardScreen extends ConsumerWidget {
         loading: () => const _ShimmerDashboard(),
         error: (err, st) => _ErrorView(
           onRetry: () => ref.invalidate(dashboardProvider),
-          onSettings: () => _showServerSettingsDialog(context, ref),
         ),
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.refresh(dashboardProvider),
@@ -28,114 +27,11 @@ class DashboardScreen extends ConsumerWidget {
           child: _DashboardContent(
             data: data,
             onExplain: () => _showExplainBottomSheet(context, ref),
-            onSettings: () => _showServerSettingsDialog(context, ref),
           ),
         ),
       ),
     );
   }
-
-  void _showServerSettingsDialog(BuildContext context, WidgetRef ref) async {
-    final currentUrl = await ApiService.getBaseUrl();
-    final controller = TextEditingController(text: currentUrl);
-
-    if (!context.mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: NuruTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuruTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Account & Server Settings',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: NuruTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Server Connection URL',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: NuruTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-              decoration: const InputDecoration(
-                hintText: 'http://192.168.43.33:8000/api',
-                prefixIcon: Icon(Icons.link_rounded, color: NuruTheme.textMuted),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: NuruTheme.textSecondary,
-                        side: const BorderSide(color: NuruTheme.surfaceLight),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await ApiService.setBaseUrl(controller.text);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ref.invalidate(dashboardProvider);
-                        }
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
 
   void _showExplainBottomSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
@@ -233,12 +129,10 @@ class DashboardScreen extends ConsumerWidget {
 class _DashboardContent extends StatelessWidget {
   final DashboardData data;
   final VoidCallback onExplain;
-  final VoidCallback onSettings;
 
   const _DashboardContent({
     required this.data,
     required this.onExplain,
-    required this.onSettings,
   });
 
   @override
@@ -250,10 +144,7 @@ class _DashboardContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 16, 24, 0),
-            child: _Header(
-              user: data.user,
-              onSettings: onSettings,
-            ),
+            child: _Header(user: data.user),
           ),
         ),
 
@@ -359,12 +250,8 @@ class _DashboardContent extends StatelessWidget {
 // ─── Header with avatar ────────────────────────────────────────────
 class _Header extends StatelessWidget {
   final UserInfo user;
-  final VoidCallback onSettings;
 
-  const _Header({
-    required this.user,
-    required this.onSettings,
-  });
+  const _Header({required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -420,22 +307,6 @@ class _Header extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-        GestureDetector(
-          onTap: onSettings,
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: NuruTheme.surfaceLight,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.settings_rounded,
-              color: NuruTheme.textSecondary,
-              size: 20,
-            ),
           ),
         ),
       ],
@@ -823,9 +694,8 @@ class _TransactionTile extends StatelessWidget {
 // ─── Error View ────────────────────────────────────────────────────
 class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
-  final VoidCallback onSettings;
 
-  const _ErrorView({required this.onRetry, required this.onSettings});
+  const _ErrorView({required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -890,21 +760,6 @@ class _ErrorView extends StatelessWidget {
                     },
                     icon: const Icon(Icons.cleaning_services_rounded, size: 18),
                     label: const Text('Reset Session'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: NuruTheme.textSecondary,
-                      side: const BorderSide(color: NuruTheme.surfaceLight),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: onSettings,
-                    icon: const Icon(Icons.settings_rounded, size: 18),
-                    label: const Text('Settings'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: NuruTheme.textSecondary,
                       side: const BorderSide(color: NuruTheme.surfaceLight),

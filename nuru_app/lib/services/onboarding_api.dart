@@ -44,8 +44,7 @@ class OnboardingApi {
     return headers;
   }
 
-  Future<Uri> _uri(String path) async =>
-      Uri.parse('${await ApiService.getBaseUrl()}$path');
+  Uri _uri(String path) => Uri.parse('${ApiService.baseUrl}$path');
 
   Map<String, dynamic> _decodeBody(http.Response res) {
     try {
@@ -92,7 +91,7 @@ class OnboardingApi {
     late final http.Response res;
     try {
       res = await _client
-          .get(await _uri(path), headers: await _headers())
+          .get(_uri(path), headers: await _headers())
           .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const OnboardingException(
@@ -110,7 +109,7 @@ class OnboardingApi {
   }) async {
     late final http.Response res;
     try {
-      final uri = await _uri(path);
+      final uri = _uri(path);
       final headers = await _headers();
       final encoded = body == null ? null : jsonEncode(body);
       res = await (method == 'PATCH'
@@ -130,7 +129,7 @@ class OnboardingApi {
     late final http.Response res;
     try {
       res = await _client
-          .delete(await _uri(path), headers: await _headers())
+          .delete(_uri(path), headers: await _headers())
           .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const OnboardingException(
@@ -150,7 +149,7 @@ class OnboardingApi {
   Future<Map<String, dynamic>?> status() async {
     try {
       final res = await _client
-          .get(await _uri('/onboarding/status/'), headers: await _headers())
+          .get(_uri('/onboarding/status/'), headers: await _headers())
           .timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) return _decodeBody(res);
     } catch (_) {

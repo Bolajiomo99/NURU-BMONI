@@ -1,83 +1,22 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_data.dart';
 import '../models/chat_message.dart';
 
 class ApiService {
-  static const String _urlKey = 'nuru_backend_api_url';
+  /// Backend API base URL — a build-time value, not a runtime guess.
+  ///
+  /// Defaults to the deployed Railway URL (production is unaffected unless
+  /// a build explicitly overrides it). For local dev, pass
+  /// --dart-define=API_URL=http://localhost:8000/api at build/run time.
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://nuru-bmoni.up.railway.app/api',
+  );
 
-  /// Shared with AuthApi — both read and write the same key so a login
-  /// performed through either path authenticates the other.
   static const String authTokenKey = 'nuru_auth_token';
-
-  static String? _cachedUrl;
   static String? _cachedAuthToken;
-
-  /// Candidate URLs to test if primary fails
-  static List<String> get _candidateUrls {
-    final list = <String>[];
-    if (kIsWeb) {
-      final webOrigin = Uri.base.origin;
-      if (webOrigin.isNotEmpty && webOrigin != 'null') {
-        list.add('$webOrigin/api');
-      }
-    }
-    list.addAll([
-      'https://nuru-bmoni.up.railway.app/api',
-      'http://localhost:8000/api',
-      'http://127.0.0.1:8000/api',
-      'http://10.0.2.2:8000/api',
-      'http://192.168.43.33:8000/api',
-    ]);
-    return list.toSet().toList();
-  }
-
-  /// Get active API base URL
-  static Future<String> getBaseUrl() async {
-    if (_cachedUrl != null && _cachedUrl!.isNotEmpty) {
-      return _cachedUrl!;
-    }
-
-    if (kIsWeb) {
-      final webOrigin = Uri.base.origin;
-      if (webOrigin.isNotEmpty && webOrigin != 'null') {
-        _cachedUrl = '$webOrigin/api';
-        return _cachedUrl!;
-      }
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString(_urlKey);
-
-    if (savedUrl != null && savedUrl.isNotEmpty) {
-      _cachedUrl = savedUrl;
-      return savedUrl;
-    }
-
-    _cachedUrl = 'https://nuru-bmoni.up.railway.app/api';
-    return _cachedUrl!;
-  }
-
-  /// Update backend URL for physical device testing
-  static Future<void> setBaseUrl(String newUrl) async {
-    String formatted = newUrl.trim();
-    if (formatted.endsWith('/')) {
-      formatted = formatted.substring(0, formatted.length - 1);
-    }
-    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
-      formatted = 'http://$formatted';
-    }
-    if (!formatted.endsWith('/api')) {
-      formatted = '$formatted/api';
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_urlKey, formatted);
-    _cachedUrl = formatted;
-    debugPrint('⚙️ Updated NURU backend URL to: $formatted');
-  }
 
   /// The DRF auth token for the signed-in account, or null when signed out.
   static Future<String?> getAuthToken() async {
@@ -114,58 +53,21 @@ class ApiService {
     return headers;
   }
 
-  /// Helper to execute GET with auto-fallback to alternate URLs if connection fails.
-  /// Returns the response even for non-200 status codes so callers can handle them.
-  static Future<http.Response> _getWithFallback(String path) async {
-    final primary = await getBaseUrl();
-    final urls = {primary, ..._candidateUrls}.toList();
-
-    Object? lastException;
-    for (final base in urls) {
-      try {
-        final res = await http
-            .get(Uri.parse('$base$path'), headers: await _headers)
-            .timeout(const Duration(seconds: 10));
-        _cachedUrl = base;
-        return res;
-      } catch (e) {
-        lastException = e;
-      }
-    }
-    throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
+  static Future<http.Response> _get(String path) async {
+    return http
+        .get(Uri.parse('$baseUrl$path'), headers: await _headers)
+        .timeout(const Duration(seconds: 15));
   }
 
-  /// Helper to execute POST with auto-fallback to alternate URLs if connection fails.
-  /// Returns the response even for non-200 status codes so callers can
-  /// handle 404, 400, 502, etc. — only network/socket errors trigger fallback.
-  static Future<http.Response> _postWithFallback(String path, Map<String, dynamic> body) async {
-    final primary = await getBaseUrl();
-    final urls = {primary, ..._candidateUrls}.toList();
-
-    Object? lastException;
-    for (final base in urls) {
-      try {
-        final res = await http
-            .post(
-              Uri.parse('$base$path'),
-              headers: await _headers,
-              body: jsonEncode(body),
-            )
-            .timeout(const Duration(seconds: 12));
-        // Server responded — cache this working URL and return immediately.
-        // Let the caller decide what to do with non-200 status codes.
-        _cachedUrl = base;
-        return res;
-      } catch (e) {
-        lastException = e;
-      }
-    }
-    throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
+  static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
+    return http
+        .post(Uri.parse('$baseUrl$path'), headers: await _headers, body: jsonEncode(body))
+        .timeout(const Duration(seconds: 15));
   }
 
   /// Fetch dashboard summary
   static Future<DashboardData> fetchDashboard() async {
-    final response = await _getWithFallback('/dashboard/');
+    final response = await _get('/dashboard/');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -177,7 +79,7 @@ class ApiService {
 
   /// Send message to NURU AI
   static Future<ChatMessageItem> sendMessage(String message) async {
-    final response = await _postWithFallback('/chat/', {'message': message});
+    final response = await _post('/chat/', {'message': message});
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -189,7 +91,7 @@ class ApiService {
 
   /// Get chat history
   static Future<List<ChatMessageItem>> fetchChatHistory() async {
-    final response = await _getWithFallback('/chat/');
+    final response = await _get('/chat/');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -202,13 +104,12 @@ class ApiService {
 
   /// Clear chat history
   static Future<void> clearChatHistory() async {
-    final url = await getBaseUrl();
-    await http.delete(Uri.parse('$url/chat/'), headers: await _headers);
+    await http.delete(Uri.parse('$baseUrl/chat/'), headers: await _headers);
   }
 
   /// Generate Explain My Money story
   static Future<Map<String, dynamic>> explainFinances() async {
-    final response = await _getWithFallback('/explain/');
+    final response = await _get('/explain/');
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -227,7 +128,7 @@ class ApiService {
     String accountName = '',
     String description = '',
   }) async {
-    final response = await _postWithFallback('/action/transfer/', {
+    final response = await _post('/action/transfer/', {
       'amount': amount,
       'currency': currency,
       'to_address': toAddress,
@@ -250,7 +151,7 @@ class ApiService {
     required String fromCurrency,
     required String toCurrency,
   }) async {
-    final response = await _postWithFallback('/action/swap/', {
+    final response = await _post('/action/swap/', {
       'amount': amount,
       'from_currency': fromCurrency,
       'to_currency': toCurrency,
@@ -263,12 +164,10 @@ class ApiService {
     }
   }
 
-  /// Reset session context back to unauthenticated guest mode and clear cached URLs
+  /// Reset session context back to unauthenticated guest mode
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_urlKey);
     await prefs.remove(authTokenKey);
-    _cachedUrl = null;
     _cachedAuthToken = null;
   }
 }
