@@ -115,9 +115,13 @@ TEMPLATES = [
 WSGI_APPLICATION = 'nuru.wsgi.application'
 
 DATABASES = {
-    'default': dj_database_url.config(
-        # as_posix() so the Windows drive letter and separators survive URL parsing
-        default=f"sqlite:///{(BASE_DIR / 'db.sqlite3').as_posix()}",
+    'default': dj_database_url.parse(
+        # dj_database_url.config()'s own `default` kwarg only applies when the
+        # env var is unset — a *present-but-empty* DATABASE_URL (the state
+        # .env.example documents as "falls back to local sqlite3") would
+        # otherwise be parsed as-is and blow up with a missing ENGINE.
+        # as_posix() so the Windows drive letter and separators survive URL parsing.
+        os.getenv('DATABASE_URL') or f"sqlite:///{(BASE_DIR / 'db.sqlite3').as_posix()}",
         conn_max_age=600,
         conn_health_checks=True,
     )

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/auth_session.dart';
+import '../routes/app_routes.dart';
 import '../services/api_service.dart';
 import '../services/auth_api.dart';
 import '../services/onboarding_api.dart';
@@ -83,3 +84,14 @@ final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<AuthSession?>>(
   (ref) => AuthController(ref.read(authApiProvider)),
 );
+
+/// Where to land right after a signup verification or login succeeds — the
+/// same next_route -> destination mapping [startupProvider] uses for a
+/// restored session, minus the token check since the caller just got one.
+Future<String> resolvePostAuthRoute(OnboardingApi api) async {
+  final status = await api.status();
+  if (status == null) return AppRoutes.home;
+  final next = status['next_route'] as String?;
+  if (next == null) return AppRoutes.home;
+  return AppRoutes.fromOnboardingStep(next) ?? AppRoutes.home;
+}

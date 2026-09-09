@@ -52,7 +52,10 @@ class AuthApi {
       code: json['error'] as String? ?? 'request_failed',
       message: json['message'] as String? ?? _fallbackMessage(res.statusCode, json),
       attemptsRemaining: (json['attempts_remaining'] as num?)?.toInt(),
-      email: json['email'] as String?,
+      // Only 'email_not_verified' sends email as a plain string; a raw DRF
+      // serializer-validation response sends {'email': [...]} instead, which
+      // an unconditional cast would crash on.
+      email: json['email'] is String ? json['email'] as String : null,
       fieldErrors: _fieldErrors(json),
     );
   }

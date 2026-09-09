@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../screens/auth/auth_choice_screen.dart';
+import '../screens/auth/forgot_password_screen.dart';
+import '../screens/auth/login_screen.dart';
+import '../screens/auth/otp_screen.dart';
+import '../screens/auth/reset_password_screen.dart';
+import '../screens/auth/signup_screen.dart';
 import '../screens/bottom_nav_shell.dart';
 import '../screens/splash_screen.dart';
 
@@ -77,13 +83,12 @@ Map<String, WidgetBuilder> buildRoutes() {
     AppRoutes.splash: (_) => const SplashScreen(),
     AppRoutes.home: (_) => const BottomNavShell(),
 
-    // CP5b
-    AppRoutes.authChoice: (_) => const _Placeholder(AppRoutes.authChoice),
-    AppRoutes.signup: (_) => const _Placeholder(AppRoutes.signup),
-    AppRoutes.otp: (_) => const _Placeholder(AppRoutes.otp),
-    AppRoutes.login: (_) => const _Placeholder(AppRoutes.login),
-    AppRoutes.forgotPassword: (_) => const _Placeholder(AppRoutes.forgotPassword),
-    AppRoutes.resetPassword: (_) => const _Placeholder(AppRoutes.resetPassword),
+    AppRoutes.authChoice: (_) => const AuthChoiceScreen(),
+    AppRoutes.signup: (_) => const SignupScreen(),
+    AppRoutes.otp: (_) => const OtpScreen(),
+    AppRoutes.login: (_) => const LoginScreen(),
+    AppRoutes.forgotPassword: (_) => const ForgotPasswordScreen(),
+    AppRoutes.resetPassword: (_) => const ResetPasswordScreen(),
 
     // CP6
     AppRoutes.onboardingBusiness: (_) => const _Placeholder(AppRoutes.onboardingBusiness),

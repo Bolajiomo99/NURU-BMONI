@@ -46,8 +46,11 @@ void main() {
     await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();
 
-    expect(find.text(AppRoutes.authChoice), findsWidgets);
-    expect(find.text('NURU'), findsNothing);
+    // AuthChoiceScreen is built now (CP5b) — assert its content directly
+    // rather than the CP5a placeholder's route-name text.
+    expect(find.text('Welcome'), findsOneWidget);
+    expect(find.text('Create Account'), findsOneWidget);
+    expect(find.text('Get Started'), findsNothing);
   });
 
   testWidgets('a returning user mid-onboarding resumes at their step',
