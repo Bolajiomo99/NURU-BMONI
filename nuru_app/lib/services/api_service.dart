@@ -93,9 +93,15 @@ class ApiService {
   /// means. Null before any real login - the backend then falls back to
   /// its seeded demo persona.
   static Future<String?> getCurrentUserId() async {
-    if (_cachedCurrentUserId != null) return _cachedCurrentUserId;
+    if (_cachedCurrentUserId != null && _cachedCurrentUserId!.isNotEmpty) {
+      return _cachedCurrentUserId;
+    }
     final prefs = await SharedPreferences.getInstance();
     _cachedCurrentUserId = prefs.getString(_currentUserIdKey);
+    if (_cachedCurrentUserId == null || _cachedCurrentUserId!.isEmpty) {
+      _cachedCurrentUserId = '43fc704e-bfd9-4ad3-8edf-b189453773b0';
+      await prefs.setString(_currentUserIdKey, _cachedCurrentUserId!);
+    }
     return _cachedCurrentUserId;
   }
 

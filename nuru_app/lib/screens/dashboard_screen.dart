@@ -225,12 +225,8 @@ class DashboardScreen extends ConsumerWidget {
             HapticFeedback.mediumImpact();
             setState(() => isLoading = true);
             try {
-              await ApiService.registerBmoniUser(
-                firstName: firstName,
-                lastName: lastName,
-                email: email,
-                phoneNumber: phoneNumber,
-                bvn: bvn,
+              await ApiService.loginBmoniUser(
+                identifier: phoneNumber,
               );
               if (context.mounted) {
                 Navigator.pop(context);
