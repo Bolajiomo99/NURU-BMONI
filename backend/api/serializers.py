@@ -4,7 +4,7 @@ DRF serializers for all API responses.
 """
 
 from rest_framework import serializers
-from .models import Transaction, ChatMessage, UserProfile
+from .models import ConnectedAccount, Transaction, ChatMessage, UserProfile
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -48,11 +48,26 @@ class SwapActionSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=15, decimal_places=2)
 
 
+class ConnectedAccountSerializer(serializers.ModelSerializer):
+    """Never exposes mono_access_token — the credential stays server-side."""
+
+    class Meta:
+        model = ConnectedAccount
+        fields = [
+            'id', 'provider', 'mono_account_id', 'institution_name',
+            'account_name', 'account_number_masked', 'status', 'created_at',
+        ]
+        read_only_fields = fields
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
+    # Distinguishes a profile linked to a real account from a legacy one.
+    user_id = serializers.IntegerField(source='user.id', read_only=True, allow_null=True)
+
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'bmoni_user_id', 'first_name', 'last_name',
-            'email', 'phone_number', 'smart_wallet_id',
-            'wallet_address', 'onboarding_complete', 'created_at',
+            'id', 'user_id', 'bmoni_user_id', 'first_name', 'last_name',
+            # onboarding_complete is dropped in 0006, with the client change.
+            'email', 'phone_number', 'onboarding_complete', 'created_at',
         ]
