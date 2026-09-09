@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'routes/app_routes.dart' as routes;
+import 'screens/splash_screen.dart';
 import 'theme/nuru_theme.dart';
-import 'screens/onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +31,11 @@ class NuruApp extends StatelessWidget {
       title: 'NURU — AI Financial Copilot',
       debugShowCheckedModeBanner: false,
       theme: NuruTheme.darkTheme,
-      home: const OnboardingScreen(),
+      // home, not initialRoute: the splash must paint synchronously on the
+      // first frame. Named routes handle everything after it.
+      home: const SplashScreen(),
+      routes: routes.buildRoutes()..remove(routes.AppRoutes.splash),
+      onGenerateRoute: routes.onGenerateRoute,
     );
   }
 }

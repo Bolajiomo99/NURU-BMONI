@@ -18,8 +18,14 @@ class BmoniAccountNotFoundException implements Exception {
 class ApiService {
   static const String _urlKey = 'nuru_backend_api_url';
   static const String _currentUserIdKey = 'nuru_current_bmoni_user_id';
+
+  /// Shared with AuthApi — both read and write the same key so a login
+  /// performed through either path authenticates the other.
+  static const String authTokenKey = 'nuru_auth_token';
+
   static String? _cachedUrl;
   static String? _cachedCurrentUserId;
+  static String? _cachedAuthToken;
 
   /// Candidate URLs to test if primary fails
   static List<String> get _candidateUrls {
@@ -102,11 +108,40 @@ class ApiService {
     _cachedCurrentUserId = bmoniUserId;
   }
 
+  /// The DRF auth token for the signed-in account, or null when signed out.
+  static Future<String?> getAuthToken() async {
+    if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
+      return _cachedAuthToken;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(authTokenKey);
+    _cachedAuthToken = token;
+    return (token != null && token.isNotEmpty) ? token : null;
+  }
+
+  static Future<void> setAuthToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(authTokenKey, token);
+    _cachedAuthToken = token;
+  }
+
+  static Future<void> clearAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(authTokenKey);
+    _cachedAuthToken = null;
+  }
+
   static Future<Map<String, String>> get _headers async {
     final headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+    final token = await getAuthToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Token $token';
+    }
+    // Legacy identity, read-only server-side and only consulted when there is
+    // no token. Retained for the seeded demo profile.
     final userId = await getCurrentUserId();
     if (userId != null && userId.isNotEmpty) {
       headers['X-Bmoni-User-Id'] = userId;
@@ -339,8 +374,10 @@ class ApiService {
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_urlKey);
+    await prefs.remove(authTokenKey);
     await prefs.setString(_currentUserIdKey, '');
     _cachedUrl = null;
     _cachedCurrentUserId = null;
+    _cachedAuthToken = null;
   }
 }
