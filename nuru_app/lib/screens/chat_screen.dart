@@ -17,6 +17,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
   bool _isSending = false;
 
   final List<String> _suggestions = [
@@ -29,6 +30,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void dispose() {
     _textController.dispose();
+    _focusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -64,7 +66,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chatState = ref.watch(chatProvider);
 
     return Scaffold(
-      body: Column(
+      body: GestureDetector(
+        onTap: () => _focusNode.unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Column(
         children: [
           // ─── Custom Header ──────────────────────
           Container(
@@ -122,7 +127,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                           SizedBox(width: 6),
                           Text(
-                            'Connected to BMONI',
+                            'Connected & Protected',
                             style: TextStyle(
                               fontSize: 12,
                               color: NuruTheme.textMuted,
@@ -259,6 +264,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                       child: TextField(
                         controller: _textController,
+                        focusNode: _focusNode,
+                        keyboardType: TextInputType.text,
+                        textInputAction: TextInputAction.send,
+                        textCapitalization: TextCapitalization.sentences,
+                        autocorrect: false,
+                        enableSuggestions: true,
+                        contextMenuBuilder: (context, editableTextState) {
+                          final items = editableTextState.contextMenuButtonItems;
+                          items.removeWhere(
+                            (item) => item.type == ContextMenuButtonType.liveTextInput,
+                          );
+                          return AdaptiveTextSelectionToolbar.buttonItems(
+                            anchors: editableTextState.contextMenuAnchors,
+                            buttonItems: items,
+                          );
+                        },
                         style: const TextStyle(
                           color: NuruTheme.textPrimary,
                           fontSize: 15,
@@ -276,7 +297,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                         ),
                         onSubmitted: _handleSend,
-                        textInputAction: TextInputAction.send,
                       ),
                     ),
                   ),
@@ -314,8 +334,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─── Empty State ───────────────────────────────────────────────────

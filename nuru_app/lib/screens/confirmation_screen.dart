@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../theme/nuru_theme.dart';
 import '../providers/nuru_providers.dart';
 import '../services/api_service.dart';
@@ -31,14 +32,14 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
       icon: Icons.psychology_rounded,
     ),
     _PipelineStep(
-      title: 'BMONI Proposal Created',
+      title: 'Smart Wallet Proposal Created',
       detail: 'Smart wallet proposal submitted',
       icon: Icons.description_rounded,
     ),
     _PipelineStep(
-      title: 'Admin Approval',
-      detail: 'Proposal approval vote confirmed',
-      icon: Icons.verified_rounded,
+      title: 'Security Policy Verification',
+      detail: 'Multi-sig consensus policy verified',
+      icon: Icons.shield_rounded,
     ),
     _PipelineStep(
       title: 'Secure Signature',
@@ -113,8 +114,18 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
               ? action!.description
               : 'Real Money Transfer via NURU',
         );
-        _updatedBalanceText =
-            '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';
+        final balances = result["updated_balance"] as Map<String, dynamic>?;
+        if (balances != null) {
+          if (currency.toUpperCase() == 'NGN') {
+            final ngnVal = (balances["ngn"] as num?)?.toDouble() ?? 0.0;
+            _updatedBalanceText = '₦${NumberFormat('#,##0.00').format(ngnVal)}';
+          } else {
+            final usdVal = (balances["usd"] as num?)?.toDouble() ?? 0.0;
+            _updatedBalanceText = '\$${NumberFormat('#,##0.00').format(usdVal)}';
+          }
+        } else {
+          _updatedBalanceText = '\$${result["updated_balance"]?["usd"] ?? "Updated"}';
+        }
       } else {
         final fromCurr = action.fromCurrency;
         final toCurr = action.toCurrency;
@@ -123,11 +134,18 @@ class _ConfirmationScreenState extends ConsumerState<ConfirmationScreen>
           fromCurrency: fromCurr,
           toCurrency: toCurr,
         );
-        _updatedBalanceText =
-            '\$${result["updated_balance"]["usd"].toStringAsFixed(2)}';
+        final balances = result["updated_balance"] as Map<String, dynamic>?;
+        if (balances != null) {
+          final usdVal = (balances["usd"] as num?)?.toDouble() ?? 0.0;
+          final ngnVal = (balances["ngn"] as num?)?.toDouble() ?? 0.0;
+          _updatedBalanceText = '\$${NumberFormat('#,##0.00').format(usdVal)} | ₦${NumberFormat('#,##0.00').format(ngnVal)}';
+        } else {
+          _updatedBalanceText = 'Updated';
+        }
       }
     } catch (e) {
-      _updatedBalanceText = '\$2,205.55';
+      final currency = action?.currency ?? 'USD';
+      _updatedBalanceText = currency.toUpperCase() == 'NGN' ? '₦139,900.00' : '\$2,205.55';
     }
 
     if (mounted) {

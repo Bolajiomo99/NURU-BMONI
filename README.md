@@ -77,7 +77,7 @@ Instead of building "another wallet," NURU sits on top of BMONI's financial infr
    - Live step-by-step progress pipeline showing the full BMONI lifecycle:
      1. `NURU AI Financial Analysis` ✓
      2. `BMONI Proposal Created` (`POST /v1/users/.../proposals`) ✓
-     3. `Admin Approval Vote` (`POST /proposals/.../approve`) ✓
+     3. `Security Policy Verification` (`POST /proposals/.../approve`) ✓
      4. `On-Device Signature` (`bmoni_embedded_sdk`) ✓
      5. `BMONI Settlement Completed` ✅
 

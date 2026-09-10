@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/nuru_theme.dart';
 import '../providers/nuru_providers.dart';
+import '../widgets/transaction_auth_sheet.dart';
 import 'confirmation_screen.dart';
 
 class SmartActionScreen extends ConsumerWidget {
@@ -275,11 +276,12 @@ class SmartActionScreen extends ConsumerWidget {
                     detail:
                         'Private keys never leave your device. Signed in Secure Enclave.',
                   ),
-                  const SizedBox(height: 32),
-
-                  // ─── Slide to Confirm ─────
-                  _SlideToConfirm(
-                    onConfirmed: () {
+                  // ─── Authorize Action (PIN + Face 2FA) ─────
+                  _AuthorizeActionButton(
+                    isTransfer: isTransfer,
+                    amount: amount,
+                    currency: currency,
+                    onAuthorized: () {
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
                           builder: (context) => const ConfirmationScreen(),
@@ -401,117 +403,85 @@ class _ReasonCard extends StatelessWidget {
   }
 }
 
-// ─── Slide to Confirm ──────────────────────────────────────────────
-class _SlideToConfirm extends StatefulWidget {
-  final VoidCallback onConfirmed;
+// ─── Authorize Action Button (PIN & Face 2FA) ─────────────────────
+class _AuthorizeActionButton extends StatelessWidget {
+  final bool isTransfer;
+  final double amount;
+  final String currency;
+  final VoidCallback onAuthorized;
 
-  const _SlideToConfirm({required this.onConfirmed});
-
-  @override
-  State<_SlideToConfirm> createState() => _SlideToConfirmState();
-}
-
-class _SlideToConfirmState extends State<_SlideToConfirm> {
-  double _dragPosition = 0;
-  bool _confirmed = false;
+  const _AuthorizeActionButton({
+    required this.isTransfer,
+    required this.amount,
+    required this.currency,
+    required this.onAuthorized,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const height = 62.0;
-    const thumbSize = 52.0;
-    final maxDrag = MediaQuery.of(context).size.width - 48 - thumbSize - 10;
+    final title = isTransfer
+        ? 'Authorize Transfer ($currency ${amount.toStringAsFixed(0)})'
+        : 'Authorize Swap ($currency ${amount.toStringAsFixed(0)})';
+    final detail = isTransfer
+        ? '2FA Security Authorization for outgoing transfer'
+        : '2FA Security Authorization for currency conversion';
 
     return Container(
       width: double.infinity,
-      height: height,
+      height: 58,
       decoration: BoxDecoration(
-        color: NuruTheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuruTheme.divider),
-      ),
-      child: Stack(
-        alignment: Alignment.centerLeft,
-        children: [
-          // Label
-          Center(
-            child: AnimatedOpacity(
-              opacity: _confirmed ? 0.0 : 1.0 - (_dragPosition / maxDrag).clamp(0.0, 0.6),
-              duration: const Duration(milliseconds: 150),
-              child: const Text(
-                'Slide to confirm →',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: NuruTheme.textMuted,
-                ),
-              ),
-            ),
-          ),
-
-          // Green fill track
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
-            width: _dragPosition + thumbSize + 10,
-            height: height,
-            decoration: BoxDecoration(
-              color: NuruTheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-
-          // Draggable thumb
-          AnimatedPositioned(
-            duration: _confirmed
-                ? const Duration(milliseconds: 300)
-                : const Duration(milliseconds: 0),
-            left: _confirmed ? maxDrag : _dragPosition + 5,
-            top: 5,
-            child: GestureDetector(
-              onHorizontalDragUpdate: (details) {
-                if (_confirmed) return;
-                setState(() {
-                  _dragPosition = (_dragPosition + details.delta.dx)
-                      .clamp(0.0, maxDrag);
-                });
-              },
-              onHorizontalDragEnd: (details) {
-                if (_confirmed) return;
-                if (_dragPosition >= maxDrag * 0.85) {
-                  setState(() => _confirmed = true);
-                  HapticFeedback.heavyImpact();
-                  Future.delayed(
-                    const Duration(milliseconds: 400),
-                    widget.onConfirmed,
-                  );
-                } else {
-                  setState(() => _dragPosition = 0);
-                }
-              },
-              child: Container(
-                width: thumbSize,
-                height: thumbSize,
-                decoration: BoxDecoration(
-                  gradient: NuruTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: NuruTheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  _confirmed
-                      ? Icons.check_rounded
-                      : Icons.arrow_forward_rounded,
-                  color: const Color(0xFF0A0E1A),
-                  size: 24,
-                ),
-              ),
-            ),
+        gradient: NuruTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: NuruTheme.primary.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.mediumImpact();
+            TransactionAuthSheet.show(
+              context,
+              actionTitle: title,
+              actionDetail: detail,
+              onAuthorized: onAuthorized,
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.shield_outlined,
+                  color: NuruTheme.background,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: NuruTheme.background,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: NuruTheme.background,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
