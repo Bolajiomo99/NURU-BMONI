@@ -1,8 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../theme/nuru_theme.dart';
 import '../models/dashboard_data.dart';
@@ -21,7 +19,6 @@ class DashboardScreen extends ConsumerWidget {
         loading: () => const _ShimmerDashboard(),
         error: (err, st) => _ErrorView(
           onRetry: () => ref.invalidate(dashboardProvider),
-          onSettings: () => _showServerSettingsDialog(context, ref),
         ),
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.refresh(dashboardProvider),
@@ -30,755 +27,13 @@ class DashboardScreen extends ConsumerWidget {
           child: _DashboardContent(
             data: data,
             onExplain: () => _showExplainBottomSheet(context, ref),
-            onSettings: () => _showServerSettingsDialog(context, ref, data.user),
-            onBmoniSignup: () => _showBmoniSignupSheet(context, ref, data.user),
           ),
         ),
       ),
     );
   }
-
-  void _showServerSettingsDialog(BuildContext context, WidgetRef ref, [UserInfo? user]) async {
-    final currentUrl = await ApiService.getBaseUrl();
-    final controller = TextEditingController(text: currentUrl);
-
-    if (!context.mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: NuruTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuruTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Account & Server Settings',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: NuruTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            InkWell(
-              onTap: () {
-                Navigator.pop(context);
-                _showBmoniSignupSheet(context, ref, user ?? UserInfo(
-                  firstName: 'Bolaji',
-                  lastName: 'Jimoh',
-                  email: 'bolajijimoh8@gmail.com',
-                  phoneNumber: '+2348123456789',
-                  bmoniUserId: '',
-                  onboardingComplete: false,
-                ));
-              },
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: NuruTheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: NuruTheme.primary.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.shield_rounded, color: NuruTheme.primary, size: 24),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'BMONI Sign Up & BVN Verification',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: NuruTheme.textPrimary,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Sign in with phone & verify BVN on BMONI API',
-                            style: TextStyle(fontSize: 12, color: NuruTheme.textMuted),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.chevron_right_rounded, color: NuruTheme.textMuted),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Server Connection URL',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: NuruTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-              decoration: const InputDecoration(
-                hintText: 'http://192.168.43.33:8000/api',
-                prefixIcon: Icon(Icons.link_rounded, color: NuruTheme.textMuted),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: NuruTheme.textSecondary,
-                        side: const BorderSide(color: NuruTheme.surfaceLight),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await ApiService.setBaseUrl(controller.text);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ref.invalidate(dashboardProvider);
-                        }
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showBmoniSignupSheet(BuildContext context, WidgetRef ref, UserInfo user) {
-    final firstNameCtrl = TextEditingController(text: user.firstName.isNotEmpty ? user.firstName : 'Bolaji');
-    final lastNameCtrl = TextEditingController(text: user.lastName.isNotEmpty ? user.lastName : 'Jimoh');
-    final emailCtrl = TextEditingController(text: user.email.isNotEmpty ? user.email : 'bolajijimoh8@gmail.com');
-    final phoneCtrl = TextEditingController(text: user.phoneNumber.isNotEmpty ? user.phoneNumber : '+2348123456789');
-    final bvnCtrl = TextEditingController(text: '22223333444');
-    final bmoniIdCtrl = TextEditingController(text: user.bmoniUserId.isNotEmpty ? user.bmoniUserId : '');
-    int activeTab = 0; // 0: Register, 1: Existing User Login
-    bool isLoading = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: NuruTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          Future<void> switchPersona({
-            required String firstName,
-            required String lastName,
-            required String email,
-            required String phoneNumber,
-            required String bvn,
-          }) async {
-            firstNameCtrl.text = firstName;
-            lastNameCtrl.text = lastName;
-            emailCtrl.text = email;
-            phoneCtrl.text = phoneNumber;
-            bvnCtrl.text = bvn;
-            HapticFeedback.mediumImpact();
-            setState(() => isLoading = true);
-            try {
-              await ApiService.loginBmoniUser(
-                identifier: phoneNumber,
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-                ref.invalidate(dashboardProvider);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.check_circle_rounded, color: Colors.white),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Active Account: $firstName $lastName (Verified)!',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: NuruTheme.healthyGreen,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-              }
-            } catch (e) {
-              setState(() => isLoading = false);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Persona switch failed: $e'),
-                    backgroundColor: NuruTheme.dangerRed,
-                  ),
-                );
-              }
-            }
-          }
-
-          final isBunch = user.firstName.toLowerCase() == 'bunch';
-          final isSamson = user.firstName.toLowerCase() == 'samson';
-
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: NuruTheme.surfaceElevated,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: NuruTheme.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: const Icon(
-                          Icons.shield_rounded,
-                          color: NuruTheme.primary,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'BMONI Account & BVN',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: NuruTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'Register new user or switch test personas',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: NuruTheme.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Segmented tab toggle
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: NuruTheme.surfaceLight,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => activeTab = 0),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: activeTab == 0 ? NuruTheme.surfaceElevated : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Test Personas / Signup',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: activeTab == 0 ? NuruTheme.textPrimary : NuruTheme.textMuted,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => activeTab = 1),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: activeTab == 1 ? NuruTheme.surfaceElevated : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Existing BMONI ID',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: activeTab == 1 ? NuruTheme.textPrimary : NuruTheme.textMuted,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (activeTab == 0) ...[
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: NuruTheme.surfaceLight,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: NuruTheme.primary.withValues(alpha: 0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.science_rounded, size: 16, color: NuruTheme.primary),
-                              SizedBox(width: 6),
-                              Text(
-                                'BMONI Sandbox Test Personas (1-Tap Switch)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: NuruTheme.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: isLoading
-                                      ? null
-                                      : () => switchPersona(
-                                            firstName: 'Bunch',
-                                            lastName: 'Dillon',
-                                            phoneNumber: '08000000000',
-                                            email: 'bunch.dillon@example.com',
-                                            bvn: '95888168924',
-                                          ),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                    decoration: BoxDecoration(
-                                      color: isBunch ? NuruTheme.healthyGreen.withValues(alpha: 0.15) : NuruTheme.surfaceElevated,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isBunch ? NuruTheme.healthyGreen : NuruTheme.surfaceLight,
-                                        width: isBunch ? 1.5 : 1,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              'Bunch Dillon',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isBunch ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            if (isBunch) ...[
-                                              const SizedBox(width: 4),
-                                              const Icon(Icons.check_circle_rounded, size: 13, color: NuruTheme.healthyGreen),
-                                            ],
-                                          ],
-                                        ),
-                                        const SizedBox(height: 3),
-                                        const Text(
-                                          'BVN: 95888168924',
-                                          style: TextStyle(fontSize: 10, color: NuruTheme.textMuted),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          isBunch ? '● Active' : 'Tap to Switch',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: isBunch ? NuruTheme.healthyGreen : NuruTheme.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: InkWell(
-                                  onTap: isLoading
-                                      ? null
-                                      : () => switchPersona(
-                                            firstName: 'Samson',
-                                            lastName: 'Jabo',
-                                            phoneNumber: '08000000001',
-                                            email: 'samson.jabo@example.com',
-                                            bvn: '22222222222',
-                                          ),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                    decoration: BoxDecoration(
-                                      color: isSamson ? NuruTheme.healthyGreen.withValues(alpha: 0.15) : NuruTheme.surfaceElevated,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isSamson ? NuruTheme.healthyGreen : NuruTheme.surfaceLight,
-                                        width: isSamson ? 1.5 : 1,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              'Samson Jabo',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isSamson ? NuruTheme.healthyGreen : NuruTheme.textPrimary,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            if (isSamson) ...[
-                                              const SizedBox(width: 4),
-                                              const Icon(Icons.check_circle_rounded, size: 13, color: NuruTheme.healthyGreen),
-                                            ],
-                                          ],
-                                        ),
-                                        const SizedBox(height: 3),
-                                        const Text(
-                                          'BVN: 22222222222',
-                                          style: TextStyle(fontSize: 10, color: NuruTheme.textMuted),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          isSamson ? '● Active' : 'Tap to Switch',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: isSamson ? NuruTheme.healthyGreen : NuruTheme.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  TextField(
-                    controller: firstNameCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    decoration: const InputDecoration(
-                      labelText: 'First Name',
-                      prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: lastNameCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    decoration: const InputDecoration(
-                      labelText: 'Last Name',
-                      prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number',
-                      hintText: '+2348123456789',
-                      prefixIcon: Icon(Icons.phone_outlined, color: NuruTheme.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email Address',
-                      prefixIcon: Icon(Icons.email_outlined, color: NuruTheme.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: bvnCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    keyboardType: TextInputType.number,
-                    maxLength: 11,
-                    decoration: const InputDecoration(
-                      labelText: 'Bank Verification Number (BVN)',
-                      hintText: '11-digit BVN',
-                      prefixIcon: Icon(Icons.badge_outlined, color: NuruTheme.textMuted),
-                      counterText: '',
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () async {
-                              HapticFeedback.mediumImpact();
-                              setState(() => isLoading = true);
-                              try {
-                                await ApiService.registerBmoniUser(
-                                  firstName: firstNameCtrl.text.trim(),
-                                  lastName: lastNameCtrl.text.trim(),
-                                  email: emailCtrl.text.trim(),
-                                  phoneNumber: phoneCtrl.text.trim(),
-                                  bvn: bvnCtrl.text.trim(),
-                                );
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                  ref.invalidate(dashboardProvider);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Row(
-                                        children: [
-                                          Icon(Icons.check_circle_rounded, color: Colors.white),
-                                          SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              'BMONI Account Connected & BVN Verified!',
-                                              style: TextStyle(fontWeight: FontWeight.w600),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      backgroundColor: NuruTheme.healthyGreen,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                setState(() => isLoading = false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Onboarding failed: $e'),
-                                      backgroundColor: NuruTheme.dangerRed,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                      child: isLoading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.black,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.verified_user_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text('Register & Verify BVN'),
-                              ],
-                            ),
-                    ),
-                  ),
-                ] else ...[
-                  TextField(
-                    controller: bmoniIdCtrl,
-                    style: const TextStyle(color: NuruTheme.textPrimary, fontSize: 14),
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number, Email, or Account Name',
-                      hintText: 'e.g. 08071334123, ada.123@example.com, or Bolaji',
-                      prefixIcon: Icon(Icons.person_outline_rounded, color: NuruTheme.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () async {
-                              HapticFeedback.mediumImpact();
-                              setState(() => isLoading = true);
-                              try {
-                                final res = await ApiService.loginBmoniUser(
-                                  identifier: bmoniIdCtrl.text.trim().isNotEmpty 
-                                      ? bmoniIdCtrl.text.trim() 
-                                      : phoneCtrl.text.trim(),
-                                );
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                  ref.invalidate(dashboardProvider);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Row(
-                                        children: [
-                                          const Icon(Icons.account_balance_wallet_rounded, color: Colors.white),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              'Connected BMONI User (${res["user"]?["bmoni_user_id"] ?? "Active"})!',
-                                              style: const TextStyle(fontWeight: FontWeight.w600),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      backgroundColor: NuruTheme.healthyGreen,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                  );
-                                }
-                              } on BmoniAccountNotFoundException catch (e) {
-                                setState(() => isLoading = false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Row(
-                                        children: [
-                                          const Icon(Icons.info_outline_rounded, color: Colors.white),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              '${e.message} Download the BMONI app to create an account first.',
-                                              style: const TextStyle(fontWeight: FontWeight.w600),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      backgroundColor: NuruTheme.textMuted,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      duration: const Duration(seconds: 5),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                setState(() => isLoading = false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Login failed: $e'),
-                                      backgroundColor: NuruTheme.dangerRed,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                      child: isLoading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.black,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.login_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text('Log In & Load Live Balances'),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    ),
-  );
-}
 
   void _showExplainBottomSheet(BuildContext context, WidgetRef ref) {
-    ref.invalidate(explainStoryProvider);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -786,124 +41,83 @@ class DashboardScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Consumer(
-        builder: (context, sheetRef, _) {
-          final storyAsync = sheetRef.watch(explainStoryProvider);
-          return DraggableScrollableSheet(
-            initialChildSize: 0.75,
-            maxChildSize: 0.9,
-            minChildSize: 0.5,
-            expand: false,
-            builder: (context, scrollController) {
-              return Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: ListView(
-                  controller: scrollController,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (context, scrollController) {
+          final storyAsync = ref.watch(explainStoryProvider);
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: ListView(
+              controller: scrollController,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: NuruTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Row(
                   children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: NuruTheme.surfaceElevated,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                    Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
+                    SizedBox(width: 10),
+                    Text(
+                      'Your Money Story',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: NuruTheme.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    const Row(
+                  ],
+                ),
+                const SizedBox(height: 20),
+                storyAsync.when(
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: CircularProgressIndicator(color: NuruTheme.primary),
+                    ),
+                  ),
+                  error: (err, st) => Text(
+                    'Could not generate story: $err',
+                    style: const TextStyle(color: NuruTheme.dangerRed),
+                  ),
+                  data: (storyData) {
+                    final story = storyData['story'] ?? '';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.auto_awesome_rounded, color: NuruTheme.accent, size: 24),
-                        SizedBox(width: 10),
                         Text(
-                          'Your Money Story',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                          story,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.7,
                             color: NuruTheme.textPrimary,
                           ),
                         ),
+                        const SizedBox(height: 28),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close'),
+                          ),
+                        ),
                       ],
-                    ),
-                    const SizedBox(height: 20),
-                    storyAsync.when(
-                      loading: () => const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(color: NuruTheme.primary),
-                              SizedBox(height: 18),
-                              Text(
-                                'NURU is analyzing your cash flow and financial health...',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: NuruTheme.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      error: (err, st) => Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.info_outline, color: NuruTheme.dangerRed, size: 36),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Could not generate story right now: $err',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: NuruTheme.dangerRed, fontSize: 14),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: () => sheetRef.refresh(explainStoryProvider),
-                                icon: const Icon(Icons.refresh, size: 18),
-                                label: const Text('Try Again'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      data: (storyData) {
-                        final story = storyData['story'] ?? '';
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              story,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                height: 1.7,
-                                color: NuruTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 28),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: ElevatedButton(
-                                onPressed: () => Navigator.pop(context),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: NuruTheme.surfaceElevated,
-                                  foregroundColor: NuruTheme.textPrimary,
-                                ),
-                                child: const Text('Got it, thanks!'),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              );
-            },
+              ],
+            ),
           );
         },
       ),
@@ -915,20 +129,14 @@ class DashboardScreen extends ConsumerWidget {
 class _DashboardContent extends StatelessWidget {
   final DashboardData data;
   final VoidCallback onExplain;
-  final VoidCallback onSettings;
-  final VoidCallback onBmoniSignup;
 
   const _DashboardContent({
     required this.data,
     required this.onExplain,
-    required this.onSettings,
-    required this.onBmoniSignup,
   });
 
   @override
   Widget build(BuildContext context) {
-    final currFmt = NumberFormat('#,##0.00');
-
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
@@ -936,26 +144,14 @@ class _DashboardContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 16, 24, 0),
-            child: _Header(
-              user: data.user,
-              onSettings: onSettings,
-              onBmoniSignup: onBmoniSignup,
-            ),
-          ),
-        ),
-
-        // ─── Balance Card ───────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-            child: _BalanceCard(balances: data.balances, currFmt: currFmt),
+            child: _Header(user: data.user),
           ),
         ),
 
         // ─── Health + Monthly Row ───────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
             child: Row(
               children: [
                 Expanded(
@@ -1054,14 +250,8 @@ class _DashboardContent extends StatelessWidget {
 // ─── Header with avatar ────────────────────────────────────────────
 class _Header extends StatelessWidget {
   final UserInfo user;
-  final VoidCallback onSettings;
-  final VoidCallback onBmoniSignup;
 
-  const _Header({
-    required this.user,
-    required this.onSettings,
-    required this.onBmoniSignup,
-  });
+  const _Header({required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -1077,120 +267,46 @@ class _Header extends StatelessWidget {
 
     return Row(
       children: [
-        GestureDetector(
-          onTap: onBmoniSignup,
-          child: Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              gradient: NuruTheme.primaryGradient,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Center(
-              child: Text(
-                initials.toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xFF0A0E1A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: NuruTheme.primaryGradient,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Center(
+            child: Text(
+              initials.toUpperCase(),
+              style: const TextStyle(
+                color: Color(0xFF0A0E1A),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: GestureDetector(
-            onTap: onBmoniSignup,
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  greeting,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: NuruTheme.textMuted,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                greeting,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: NuruTheme.textMuted,
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        user.firstName,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: NuruTheme.textPrimary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: NuruTheme.textMuted),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        GestureDetector(
-          onTap: onBmoniSignup,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: user.onboardingComplete
-                  ? NuruTheme.healthyGreen.withValues(alpha: 0.15)
-                  : NuruTheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: user.onboardingComplete
-                    ? NuruTheme.healthyGreen.withValues(alpha: 0.4)
-                    : NuruTheme.primary.withValues(alpha: 0.4),
               ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  user.onboardingComplete
-                      ? Icons.verified_user_rounded
-                      : Icons.badge_outlined,
-                  color: user.onboardingComplete
-                      ? NuruTheme.healthyGreen
-                      : NuruTheme.primary,
-                  size: 16,
+              const SizedBox(height: 2),
+              Text(
+                user.firstName,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: NuruTheme.textPrimary,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  user.onboardingComplete ? 'BMONI Live' : 'Verify BVN',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: user.onboardingComplete
-                        ? NuruTheme.healthyGreen
-                        : NuruTheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: onSettings,
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: NuruTheme.surfaceLight,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.settings_rounded,
-              color: NuruTheme.textSecondary,
-              size: 20,
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -1198,164 +314,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ─── Balance Card ──────────────────────────────────────────────────
-class _BalanceCard extends StatefulWidget {
-  final Balances balances;
-  final NumberFormat currFmt;
-
-  const _BalanceCard({required this.balances, required this.currFmt});
-
-  @override
-  State<_BalanceCard> createState() => _BalanceCardState();
-}
-
-class _BalanceCardState extends State<_BalanceCard> {
-  bool _hidden = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: NuruTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: NuruTheme.primary.withValues(alpha: 0.2),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Total Balance',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white70,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  setState(() => _hidden = !_hidden);
-                },
-                child: Icon(
-                  _hidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  color: Colors.white60,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: Text(
-              _hidden
-                  ? '••••••'
-                  : '\$${widget.currFmt.format(widget.balances.totalUsdEquivalent)}',
-              key: ValueKey(_hidden),
-              style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            height: 1,
-            color: Colors.white.withValues(alpha: 0.15),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _CurrencyPill(
-                flag: '🇺🇸',
-                label: 'USD',
-                amount: _hidden
-                    ? '••••'
-                    : '\$${widget.currFmt.format(widget.balances.usd)}',
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 1,
-                height: 32,
-                color: Colors.white.withValues(alpha: 0.15),
-              ),
-              const SizedBox(width: 12),
-              _CurrencyPill(
-                flag: '🇳🇬',
-                label: 'NGN',
-                amount: _hidden
-                    ? '••••'
-                    : '₦${widget.currFmt.format(widget.balances.ngn)}',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CurrencyPill extends StatelessWidget {
-  final String flag;
-  final String label;
-  final String amount;
-
-  const _CurrencyPill({
-    required this.flag,
-    required this.label,
-    required this.amount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        children: [
-          Text(flag, style: const TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white60,
-                  ),
-                ),
-                Text(
-                  amount,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Health Score Card with Custom Arc ──────────────────────────────
 class _HealthCard extends StatelessWidget {
@@ -1736,9 +694,8 @@ class _TransactionTile extends StatelessWidget {
 // ─── Error View ────────────────────────────────────────────────────
 class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
-  final VoidCallback onSettings;
 
-  const _ErrorView({required this.onRetry, required this.onSettings});
+  const _ErrorView({required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1812,21 +769,6 @@ class _ErrorView extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: onSettings,
-                    icon: const Icon(Icons.settings_rounded, size: 18),
-                    label: const Text('Settings'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: NuruTheme.textSecondary,
-                      side: const BorderSide(color: NuruTheme.surfaceLight),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ],
@@ -1867,9 +809,6 @@ class _ShimmerDashboard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              // Balance card skeleton
-              _shimmerBox(double.infinity, 170, 24),
-              const SizedBox(height: 16),
               // Health + Monthly row
               Row(
                 children: [

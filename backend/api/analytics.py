@@ -13,7 +13,7 @@ from django.db.models import Sum, Q
 NGN_TO_USD_RATE = Decimal('0.00062')  # ~₦1,600 = $1
 
 
-def calculate_health_score(user, txns=None):
+def calculate_health_score(user):
     """
     Calculate a 0-100 financial health score based on:
     - Income stability (25 pts)
@@ -22,32 +22,23 @@ def calculate_health_score(user, txns=None):
     - Savings buffer (20 pts)
     - Spending trend (10 pts)
     """
+    from .models import Transaction
+
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
 
-    if txns is not None:
-        txns_this_month = [t for t in txns if t.timestamp >= month_start]
-        txns_last_month = [t for t in txns if last_month_start <= t.timestamp < month_start]
-        income_this = _total_income_usd_mem(txns_this_month)
-        income_last = _total_income_usd_mem(txns_last_month)
-        spending_this = _total_spending_usd_mem(txns_this_month)
-        spending_last = _total_spending_usd_mem(txns_last_month)
-        usd_balance, ngn_balance = _get_balances_from_transactions(user, txns=txns)
-    else:
-        txns_this_month = user.transactions.filter(timestamp__gte=month_start)
-        txns_last_month = user.transactions.filter(
-            timestamp__gte=last_month_start, timestamp__lt=month_start
-        )
-        income_this = _total_income_usd(txns_this_month)
-        income_last = _total_income_usd(txns_last_month)
-        spending_this = _total_spending_usd(txns_this_month)
-        spending_last = _total_spending_usd(txns_last_month)
-        usd_balance, ngn_balance = _get_balances_from_transactions(user)
+    txns_this_month = user.transactions.filter(timestamp__gte=month_start)
+    txns_last_month = user.transactions.filter(
+        timestamp__gte=last_month_start, timestamp__lt=month_start
+    )
 
     score = 0
 
     # ── Income Stability (25 pts) ─────────────────────────────────
+    income_this = _total_income_usd(txns_this_month)
+    income_last = _total_income_usd(txns_last_month)
+
     if income_this > 0:
         score += 15  # Has income this month
         if income_last > 0:
@@ -58,6 +49,8 @@ def calculate_health_score(user, txns=None):
                 score += 5
 
     # ── Spending Ratio (25 pts) ───────────────────────────────────
+    spending_this = _total_spending_usd(txns_this_month)
+
     if income_this > 0:
         spend_ratio = float(spending_this / income_this)
         if spend_ratio <= 0.4:
@@ -72,6 +65,7 @@ def calculate_health_score(user, txns=None):
         score += 15  # No spending, no income — neutral
 
     # ── Currency Diversification (20 pts) ─────────────────────────
+    usd_balance, ngn_balance = _get_balances_from_transactions(user)
     total_usd_equiv = usd_balance + (ngn_balance * NGN_TO_USD_RATE)
 
     if total_usd_equiv > 0:
@@ -99,6 +93,7 @@ def calculate_health_score(user, txns=None):
         score += 15  # Has money, no spending pattern yet
 
     # ── Spending Trend (10 pts) ───────────────────────────────────
+    spending_last = _total_spending_usd(txns_last_month)
     if spending_last > 0 and spending_this > 0:
         trend = float(spending_this / spending_last)
         if trend <= 0.9:
@@ -121,60 +116,52 @@ def get_financial_summary(user):
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
 
-    all_txns = list(user.transactions.all().order_by('-timestamp'))
-    if not all_txns:
-        return {
-            'health_score': 0,
-            'health_status': 'Not Connected' if user.bmoni_user_id == 'guest-unauthenticated' else 'New Account',
-            'balances': {'usd': 0.0, 'ngn': 0.0, 'total_usd_equivalent': 0.0},
-            'this_month': {
-                'income_usd': 0.0, 'income_ngn': 0.0,
-                'spending_usd': 0.0, 'spending_ngn': 0.0,
-                'net_usd': 0.0, 'net_ngn': 0.0,
-            },
-            'trends': {'income_change_pct': 0.0, 'spending_change_pct': 0.0},
-            'categories': [],
-            'safe_weekly_spend_usd': 0.0,
-            'currency_concentration': {'usd_pct': 0.0, 'ngn_pct': 0.0},
-            'recent_transactions': [],
-        }
+    txns_this_month = user.transactions.filter(timestamp__gte=month_start)
+    txns_last_month = user.transactions.filter(
+        timestamp__gte=last_month_start, timestamp__lt=month_start
+    )
 
-    txns_this_month = [t for t in all_txns if t.timestamp >= month_start]
-    txns_last_month = [t for t in all_txns if last_month_start <= t.timestamp < month_start]
+    # Current month totals
+    income_usd = _sum_by(txns_this_month, 'credit', 'USD')
+    income_ngn = _sum_by(txns_this_month, 'credit', 'NGN')
+    spending_usd = _sum_by(txns_this_month, 'debit', 'USD')
+    spending_ngn = _sum_by(txns_this_month, 'debit', 'NGN')
 
-    income_usd = sum((t.amount for t in txns_this_month if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
-    income_ngn = sum((t.amount for t in txns_this_month if t.transaction_type == 'credit' and t.currency == 'NGN'), Decimal('0'))
-    spending_usd = sum((t.amount for t in txns_this_month if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
-    spending_ngn = sum((t.amount for t in txns_this_month if t.transaction_type == 'debit' and t.currency == 'NGN'), Decimal('0'))
+    # Last month for comparison
+    last_income_usd = _sum_by(txns_last_month, 'credit', 'USD')
+    last_spending_usd = _sum_by(txns_last_month, 'debit', 'USD')
 
-    last_income_usd = sum((t.amount for t in txns_last_month if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
-    last_spending_usd = sum((t.amount for t in txns_last_month if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
+    # Spending by category
+    categories = get_spending_by_category(user)
 
-    categories = get_spending_by_category(user, txns=all_txns)
-    health_score = calculate_health_score(user, txns=all_txns)
+    # Health score
+    health_score = calculate_health_score(user)
 
-    usd_balance, ngn_balance = _get_balances_from_transactions(user, txns=all_txns)
-    total_equiv = usd_balance + (ngn_balance * NGN_TO_USD_RATE)
+    # Safe to spend this week
+    safe_weekly = _calculate_safe_weekly_spend(user, health_score)
 
-    safe_weekly = _calculate_safe_weekly_spend(user, health_score, total_usd_equiv=total_equiv)
-
+    # Income change percentage
     total_income = income_usd + (income_ngn * NGN_TO_USD_RATE)
     total_last_income = last_income_usd
-    income_change_pct = 0.0
+    income_change_pct = 0
     if total_last_income > 0:
         income_change_pct = round(
             float((total_income - total_last_income) / total_last_income * 100), 1
         )
 
+    # Spending change percentage
     total_spending = spending_usd + (spending_ngn * NGN_TO_USD_RATE)
     total_last_spending = last_spending_usd
-    spending_change_pct = 0.0
+    spending_change_pct = 0
     if total_last_spending > 0:
         spending_change_pct = round(
             float((total_spending - total_last_spending) / total_last_spending * 100), 1
         )
 
-    usd_concentration = round(float(usd_balance / total_equiv * 100), 1) if total_equiv > 0 else 0.0
+    # Currency concentration
+    usd_balance, ngn_balance = _get_balances_from_transactions(user)
+    total_equiv = usd_balance + (ngn_balance * NGN_TO_USD_RATE)
+    usd_concentration = round(float(usd_balance / total_equiv * 100), 1) if total_equiv > 0 else 0
 
     return {
         'health_score': health_score,
@@ -202,39 +189,14 @@ def get_financial_summary(user):
             'usd_pct': usd_concentration,
             'ngn_pct': round(100 - usd_concentration, 1),
         },
-        'recent_transactions': _recent_transactions(user, limit=10, txns=all_txns),
+        'recent_transactions': _recent_transactions(user, limit=10),
     }
 
 
-def get_spending_by_category(user, txns=None):
+def get_spending_by_category(user):
     """Aggregate spending by category for current month."""
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    if txns is not None:
-        debit_txns = [t for t in txns if t.timestamp >= month_start and t.transaction_type == 'debit']
-        cat_map = {}
-        for t in debit_txns:
-            if t.category not in cat_map:
-                cat_map[t.category] = {'usd': Decimal('0'), 'ngn': Decimal('0')}
-            if t.currency == 'USD':
-                cat_map[t.category]['usd'] += t.amount
-            elif t.currency == 'NGN':
-                cat_map[t.category]['ngn'] += t.amount
-
-        category_choices = dict(user.transactions.model.CATEGORY_CHOICES)
-        categories = []
-        for cat_key, amt in cat_map.items():
-            total_equiv = float(amt['usd'] + amt['ngn'] * NGN_TO_USD_RATE)
-            categories.append({
-                'category': cat_key,
-                'label': category_choices.get(cat_key, cat_key),
-                'usd': float(amt['usd']),
-                'ngn': float(amt['ngn']),
-                'total_usd_equivalent': total_equiv,
-            })
-        categories.sort(key=lambda x: x['total_usd_equivalent'], reverse=True)
-        return categories
 
     debits = user.transactions.filter(
         timestamp__gte=month_start,
@@ -283,18 +245,6 @@ def can_afford(user, amount_usd):
 
 # ── Private helpers ───────────────────────────────────────────────
 
-def _total_income_usd_mem(txns):
-    usd = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
-    ngn = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'NGN'), Decimal('0'))
-    return usd + (ngn * NGN_TO_USD_RATE)
-
-
-def _total_spending_usd_mem(txns):
-    usd = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
-    ngn = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'NGN'), Decimal('0'))
-    return usd + (ngn * NGN_TO_USD_RATE)
-
-
 def _sum_by(queryset, txn_type, currency):
     result = queryset.filter(
         transaction_type=txn_type, currency=currency
@@ -314,57 +264,14 @@ def _total_spending_usd(queryset):
     return usd + (ngn * NGN_TO_USD_RATE)
 
 
-def _get_balances_from_transactions(user, txns=None):
-    """Calculate running balances or fetch live BMONI balances if connected."""
-    if (
-        user.bmoni_user_id
-        and user.bmoni_user_id != 'guest-unauthenticated'
-        and user.transactions.count() == 0
-    ):
-        try:
-            from .seed_data import seed_user_transactions
-            seed_user_transactions(user)
-        except Exception:
-            pass
+def _get_balances_from_transactions(user):
+    """Calculate running balances from the user's transaction history.
 
-    if (
-        user.bmoni_user_id
-        and not user.bmoni_user_id.startswith(('demo', 'guest', 'mock', 'bmoni-'))
-    ):
-        try:
-            from .bmoni_client import BmoniClient
-            client = BmoniClient()
-            res = client.get_balances(user.bmoni_user_id)
-            if res.get('success') and res.get('data'):
-                data = res['data']
-                usd_bal = Decimal('0')
-                ngn_bal = Decimal('0')
-                if isinstance(data, list):
-                    for item in data:
-                        curr = str(item.get('currency', '')).upper()
-                        amt = Decimal(str(item.get('amount', 0)))
-                        if curr in ['USD', 'USDC']:
-                            usd_bal += amt
-                        elif curr in ['NGN', 'CNGN']:
-                            ngn_bal += amt
-                    if usd_bal > 0 or ngn_bal > 0:
-                        return (usd_bal, ngn_bal)
-                elif isinstance(data, dict):
-                    usd_bal = Decimal(str(data.get('usd', data.get('USD', 0))))
-                    ngn_bal = Decimal(str(data.get('ngn', data.get('NGN', 0))))
-                    if usd_bal > 0 or ngn_bal > 0:
-                        return (usd_bal, ngn_bal)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Error fetching live BMONI balances: {e}")
-
-    if txns is not None:
-        credits_usd = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'USD'), Decimal('0'))
-        debits_usd = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'USD'), Decimal('0'))
-        credits_ngn = sum((t.amount for t in txns if t.transaction_type == 'credit' and t.currency == 'NGN'), Decimal('0'))
-        debits_ngn = sum((t.amount for t in txns if t.transaction_type == 'debit' and t.currency == 'NGN'), Decimal('0'))
-        return (credits_usd - debits_usd, credits_ngn - debits_ngn)
-
+    Previously this could fire a live BMONI balance lookup — a synchronous,
+    30-second-timeout HTTP call inside the request thread on every dashboard
+    load. Balances for linked accounts now come from Mono, via
+    GET /api/mono/accounts/?balances=true.
+    """
     credits_usd = _sum_by(user.transactions.all(), 'credit', 'USD')
     debits_usd = _sum_by(user.transactions.all(), 'debit', 'USD')
     credits_ngn = _sum_by(user.transactions.all(), 'credit', 'NGN')
@@ -372,13 +279,10 @@ def _get_balances_from_transactions(user, txns=None):
     return (credits_usd - debits_usd, credits_ngn - debits_ngn)
 
 
-def _calculate_safe_weekly_spend(user, health_score, total_usd_equiv=None):
+def _calculate_safe_weekly_spend(user, health_score):
     """Estimate safe weekly spending based on balance and patterns."""
-    if total_usd_equiv is None:
-        usd_balance, ngn_balance = _get_balances_from_transactions(user)
-        total = usd_balance + (ngn_balance * NGN_TO_USD_RATE)
-    else:
-        total = total_usd_equiv
+    usd_balance, ngn_balance = _get_balances_from_transactions(user)
+    total = usd_balance + (ngn_balance * NGN_TO_USD_RATE)
 
     # Conservatively allow 15-25% of total balance per week
     if health_score >= 80:
@@ -408,11 +312,8 @@ def _score_to_status(score):
         return 'Critical'
 
 
-def _recent_transactions(user, limit=10, txns=None):
-    if txns is not None:
-        txn_list = txns[:limit]
-    else:
-        txn_list = user.transactions.all()[:limit]
+def _recent_transactions(user, limit=10):
+    txns = user.transactions.all()[:limit]
     return [
         {
             'id': t.id,
@@ -421,8 +322,8 @@ def _recent_transactions(user, limit=10, txns=None):
             'currency': t.currency,
             'type': t.transaction_type,
             'category': t.category,
-            'category_label': dict(user.transactions.model.CATEGORY_CHOICES).get(t.category, t.category),
+            'category_label': dict(t.CATEGORY_CHOICES).get(t.category, t.category),
             'timestamp': t.timestamp.isoformat(),
         }
-        for t in txn_list
+        for t in txns
     ]
