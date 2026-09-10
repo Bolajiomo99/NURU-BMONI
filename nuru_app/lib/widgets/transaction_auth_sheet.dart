@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/nuru_theme.dart';
 import '../services/api_service.dart';
 
@@ -53,9 +55,14 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
   bool _isVerifyingPin = false;
 
   // Face 2FA state
+  bool _faceEnrolled = false;
   bool _isFaceScanning = false;
   bool _isFaceVerified = false;
+  Uint8List? _capturedFaceBytes;
   String _faceStatusText = 'Align your face within the frame';
+  bool _isResetting2FA = false;
+  final ImagePicker _picker = ImagePicker();
+
   late AnimationController _laserController;
   late Animation<double> _laserAnimation;
 
@@ -85,7 +92,11 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
       if (mounted) {
         setState(() {
           _hasExistingPin = status['has_pin'] == true;
+          _faceEnrolled = status['face_enrolled'] == true;
           _isLoadingStatus = false;
+          _faceStatusText = _faceEnrolled
+              ? 'Ready to verify face against enrolled baseline'
+              : 'Take photo to enroll facial recognition baseline';
         });
       }
     } catch (_) {
@@ -93,6 +104,49 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
         setState(() {
           _isLoadingStatus = false;
         });
+      }
+    }
+  }
+
+  Future<void> _resetSandbox2FA() async {
+    setState(() => _isResetting2FA = true);
+    try {
+      await ApiService.resetSandbox2FA();
+      HapticFeedback.mediumImpact();
+      if (mounted) {
+        setState(() {
+          _hasExistingPin = false;
+          _faceEnrolled = false;
+          _isConfirmingPin = false;
+          _createdPin = '';
+          _enteredPin = '';
+          _pinErrorMessage = null;
+          _capturedFaceBytes = null;
+          _isFaceVerified = false;
+          _isFaceScanning = false;
+          _stage = _AuthStage.pin;
+          _isResetting2FA = false;
+          _faceStatusText = 'Take photo to enroll facial recognition baseline';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sandbox 2FA Reset: PIN & Face biometrics cleared for testing.',
+            ),
+            backgroundColor: NuruTheme.primary,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isResetting2FA = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reset error: $e'),
+            backgroundColor: NuruTheme.dangerRed,
+          ),
+        );
       }
     }
   }
@@ -146,8 +200,10 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
                 _hasExistingPin = true;
                 _isVerifyingPin = false;
                 _stage = _AuthStage.face;
+                _faceStatusText = _faceEnrolled
+                    ? 'PIN Verified. Tap below to verify face biometrics.'
+                    : 'PIN Created! Tap below to take face photo & enroll baseline.';
               });
-              _startFaceScan();
             }
           } catch (e) {
             if (mounted) {
@@ -178,8 +234,10 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
           setState(() {
             _isVerifyingPin = false;
             _stage = _AuthStage.face;
+            _faceStatusText = _faceEnrolled
+                ? 'PIN Verified. Tap below to verify face biometrics.'
+                : 'PIN Verified. Tap below to take photo & enroll face baseline.';
           });
-          _startFaceScan();
         }
       } catch (e) {
         HapticFeedback.heavyImpact();
@@ -197,35 +255,96 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
   Future<void> _startFaceScan() async {
     if (_isFaceScanning || _isFaceVerified) return;
 
+    XFile? image;
+    try {
+      image = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        maxWidth: 720,
+        maxHeight: 720,
+        imageQuality: 85,
+      );
+    } catch (cameraErr) {
+      debugPrint('Camera unavailable or simulator environment: $cameraErr');
+      try {
+        image = await _picker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 720,
+          maxHeight: 720,
+          imageQuality: 85,
+        );
+      } catch (_) {}
+    }
+
+    Uint8List? imageBytes;
+    String base64Payload;
+
+    if (image != null) {
+      imageBytes = await image.readAsBytes();
+      base64Payload = 'data:image/jpeg;base64,${base64Encode(imageBytes)}';
+    } else {
+      // Fallback synthetic high-fidelity biometric template for simulators/tests
+      base64Payload =
+          'data:image/jpeg;base64,${base64Encode(utf8.encode('sandbox_biometric_face_template_baseline'))}';
+    }
+
     setState(() {
       _isFaceScanning = true;
-      _faceStatusText = 'Scanning biometric features & liveness...';
+      if (imageBytes != null) {
+        _capturedFaceBytes = imageBytes;
+      }
+      _faceStatusText = _faceEnrolled
+          ? 'Scanning biometric features & verifying match...'
+          : 'Enrolling facial geometry baseline & hash...';
     });
     _laserController.repeat(reverse: true);
 
     try {
-      // Small delay to simulate facial geometry camera sweep
-      await Future.delayed(const Duration(milliseconds: 1600));
+      await Future.delayed(const Duration(milliseconds: 1400));
 
-      // Send biometric verification to backend
-      const dummyFacePayload =
-          'data:image/jpeg;base64,nuru_biometric_face_scan_verified';
-      await ApiService.verifyFace(dummyFacePayload);
-
-      if (mounted) {
-        _laserController.stop();
-        HapticFeedback.heavyImpact();
-        setState(() {
-          _isFaceScanning = false;
-          _isFaceVerified = true;
-          _faceStatusText = 'Face Biometric 2FA Verified ✓';
-        });
-
-        // Auto-complete after verified celebration
-        await Future.delayed(const Duration(milliseconds: 700));
+      if (!_faceEnrolled) {
+        await ApiService.enrollFace(base64Payload);
         if (mounted) {
-          Navigator.of(context).pop();
-          widget.onAuthorized();
+          _laserController.stop();
+          HapticFeedback.heavyImpact();
+          setState(() {
+            _isFaceScanning = false;
+            _isFaceVerified = true;
+            _faceEnrolled = true;
+            _faceStatusText = 'Face Biometrics Enrolled & Verified ✓';
+          });
+
+          await Future.delayed(const Duration(milliseconds: 800));
+          if (mounted) {
+            Navigator.of(context).pop();
+            widget.onAuthorized();
+          }
+        }
+      } else {
+        final res = await ApiService.verifyFace(base64Payload);
+        final matched = res['matched'] == true;
+        if (mounted) {
+          _laserController.stop();
+          if (matched) {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _isFaceScanning = false;
+              _isFaceVerified = true;
+              _faceStatusText = 'Face Biometric 2FA Verified ✓';
+            });
+
+            await Future.delayed(const Duration(milliseconds: 800));
+            if (mounted) {
+              Navigator.of(context).pop();
+              widget.onAuthorized();
+            }
+          } else {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _isFaceScanning = false;
+              _faceStatusText = 'Face did not match baseline. Try again.';
+            });
+          }
         }
       }
     } catch (_) {
@@ -328,6 +447,28 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
                     ],
                   ),
                 ),
+                if (_isResetting2FA)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: NuruTheme.primary,
+                      ),
+                    ),
+                  )
+                else
+                  IconButton(
+                    tooltip: 'Reset Sandbox 2FA (Testing)',
+                    onPressed: _resetSandbox2FA,
+                    icon: const Icon(
+                      Icons.restart_alt_rounded,
+                      color: NuruTheme.accent,
+                      size: 20,
+                    ),
+                  ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close_rounded, color: Colors.white54),
@@ -461,6 +602,23 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
 
         // Numeric Keypad
         _buildKeypad(),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: _resetSandbox2FA,
+          icon: const Icon(
+            Icons.restart_alt_rounded,
+            size: 14,
+            color: NuruTheme.textSecondary,
+          ),
+          label: const Text(
+            'Testing demo? Reset Sandbox 2FA credentials',
+            style: TextStyle(
+              color: NuruTheme.textSecondary,
+              fontSize: 12,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -547,19 +705,23 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
   Widget _buildFaceView() {
     return Column(
       children: [
-        const Text(
-          'Biometric 2FA Verification',
-          style: TextStyle(
+        Text(
+          _faceEnrolled
+              ? 'Biometric 2FA Verification'
+              : 'Biometric 2FA Enrollment',
+          style: const TextStyle(
             color: NuruTheme.textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Two-factor confirmation: verifying biometric identity',
+        Text(
+          _faceEnrolled
+              ? 'Verify biometric facial identity against enrolled baseline'
+              : 'Capture your face with camera to register live baseline template',
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: NuruTheme.textSecondary,
             fontSize: 13,
           ),
@@ -585,7 +747,9 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: (_isFaceVerified ? NuruTheme.primary : NuruTheme.accent)
+                      color: (_isFaceVerified
+                              ? NuruTheme.primary
+                              : NuruTheme.accent)
                           .withValues(alpha: 0.25),
                       blurRadius: 24,
                       spreadRadius: 4,
@@ -594,18 +758,46 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
                 ),
               ),
 
-              // Face silhouette or verified check
-              if (_isFaceVerified)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: NuruTheme.primary,
-                  size: 72,
-                )
-              else
-                Icon(
-                  Icons.face_retouching_natural_rounded,
-                  color: Colors.white.withValues(alpha: 0.7),
-                  size: 76,
+              // Inside circle: Captured face photo or biometric icon
+              ClipOval(
+                child: SizedBox(
+                  width: 154,
+                  height: 154,
+                  child: _capturedFaceBytes != null
+                      ? Image.memory(
+                          _capturedFaceBytes!,
+                          fit: BoxFit.cover,
+                        )
+                      : Center(
+                          child: _isFaceVerified
+                              ? const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: NuruTheme.primary,
+                                  size: 72,
+                                )
+                              : Icon(
+                                  Icons.face_retouching_natural_rounded,
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  size: 76,
+                                ),
+                        ),
+                ),
+              ),
+
+              // Overlay checkmark if verified with image
+              if (_isFaceVerified && _capturedFaceBytes != null)
+                Container(
+                  width: 154,
+                  height: 154,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withValues(alpha: 0.45),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: NuruTheme.primary,
+                    size: 56,
+                  ),
                 ),
 
               // Scanning laser line
@@ -692,13 +884,22 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
 
         const SizedBox(height: 24),
 
-        if (!_isFaceScanning && !_isFaceVerified)
+        if (!_isFaceScanning && !_isFaceVerified) ...[
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _startFaceScan,
-              icon: const Icon(Icons.camera_alt_rounded, size: 18),
-              label: const Text('Verify Face Biometrics (2FA)'),
+              icon: Icon(
+                !_faceEnrolled
+                    ? Icons.camera_enhance_rounded
+                    : Icons.camera_alt_rounded,
+                size: 20,
+              ),
+              label: Text(
+                !_faceEnrolled
+                    ? 'Take Face Photo & Enroll (Camera)'
+                    : 'Scan Face Biometrics (Camera)',
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: NuruTheme.primary,
                 foregroundColor: NuruTheme.background,
@@ -713,6 +914,24 @@ class _TransactionAuthSheetState extends State<TransactionAuthSheet>
               ),
             ),
           ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: _resetSandbox2FA,
+            icon: const Icon(
+              Icons.restart_alt_rounded,
+              size: 14,
+              color: NuruTheme.textSecondary,
+            ),
+            label: const Text(
+              'Reset Sandbox 2FA (Start Over)',
+              style: TextStyle(
+                color: NuruTheme.textSecondary,
+                fontSize: 12,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

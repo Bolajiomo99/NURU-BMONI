@@ -375,4 +375,14 @@ class ApiService {
     }
     throw Exception(data['message'] ?? 'Face verification failed');
   }
+
+  /// Reset 2FA PIN and Face Biometrics for sandbox testing account
+  static Future<Map<String, dynamic>> resetSandbox2FA() async {
+    final response = await _post('/auth/sandbox/reset-2fa/', {});
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return data;
+    }
+    throw Exception(data['message'] ?? 'Failed to reset sandbox 2FA');
+  }
 }

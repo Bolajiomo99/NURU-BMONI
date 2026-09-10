@@ -238,6 +238,14 @@ def seed_samson_transactions(user, force_reset=False):
     transactions = [
         # This Month - Income
         {
+            'description': 'Export settlement - AgroGlobal Trade',
+            'amount': Decimal('1250.00'),
+            'currency': 'USD',
+            'transaction_type': 'credit',
+            'category': 'business_income',
+            'timestamp': month_start + timedelta(hours=2),
+        },
+        {
             'description': 'Farmyn Produce Settlement',
             'amount': Decimal('180000.00'),
             'currency': 'NGN',
@@ -426,18 +434,18 @@ def seed_demo_onboarded_user():
             'smart_wallet_id': '3e64d0ba-30d1-4277-b72e-a2d2464b9c19',
             'wallet_address': '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6',
             'smart_account_address': '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6',
-            'pin_enrolled': True,
-            'face_enrolled': True,
+            'face_enrolled': False,
         }
     )
     profile.user = auth_user
     profile.email = email
-    profile.pin_enrolled = True
-    profile.face_enrolled = True
+    # Sandbox demo persona begins with 2FA un-enrolled so presenter/judges test live setup
+    profile.face_enrolled = False
+    profile.transaction_pin_hash = ''
+    profile.face_image_data = ''
     profile.smart_wallet_id = '3e64d0ba-30d1-4277-b72e-a2d2464b9c19'
     profile.wallet_address = '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6'
     profile.smart_account_address = '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6'
-    profile.set_pin('1234')
     profile.save()
 
     # Seed Samson's Nigerian transactions

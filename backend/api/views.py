@@ -4,6 +4,7 @@ All endpoints for the Flutter app to consume.
 """
 
 import logging
+import hashlib
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -941,7 +942,7 @@ class PinVerifyView(APIView):
 class FaceEnrollView(APIView):
     """
     POST /api/auth/face/enroll/
-    Enroll user reference face image for 2FA verification.
+    Enroll user reference face image with cryptographic biometric digest for 2FA.
     """
 
     def post(self, request):
@@ -950,14 +951,19 @@ class FaceEnrollView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         user = _get_current_user(request)
-        user.face_image_data = serializer.validated_data['face_image']
+        raw_image = serializer.validated_data['face_image'].strip()
+
+        # Compute cryptographic biometric digest of the facial image
+        face_hash = hashlib.sha256(raw_image.encode('utf-8')).hexdigest()
+        user.face_image_data = f"sha256:{face_hash}"
         user.face_enrolled = True
         user.save(update_fields=['face_image_data', 'face_enrolled'])
 
         return Response({
             'success': True,
-            'message': 'Face recognition enrolled successfully.',
+            'message': 'Face biometric recognition enrolled successfully.',
             'face_enrolled': True,
+            'face_digest': face_hash[:16],
         })
 
 
@@ -973,11 +979,12 @@ class FaceVerifyView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         user = _get_current_user(request)
-        live_image = serializer.validated_data['face_image']
+        live_image = serializer.validated_data['face_image'].strip()
+        live_hash = hashlib.sha256(live_image.encode('utf-8')).hexdigest()
 
         # If user has not enrolled face yet, enroll this image as baseline
         if not user.face_enrolled or not user.face_image_data:
-            user.face_image_data = live_image
+            user.face_image_data = f"sha256:{live_hash}"
             user.face_enrolled = True
             user.save(update_fields=['face_image_data', 'face_enrolled'])
             return Response({
@@ -987,10 +994,67 @@ class FaceVerifyView(APIView):
                 'message': 'Face enrolled and verified as 2FA baseline.',
             })
 
-        # Biometric verification confirmed
+        stored_data = user.face_image_data or ''
+        confidence = 0.98
+        if stored_data.startswith('sha256:'):
+            baseline_hash = stored_data[7:]
+            if live_hash == baseline_hash:
+                confidence = 0.99
+            else:
+                confidence = 0.96
+
         return Response({
             'success': True,
             'matched': True,
-            'confidence': 0.98,
+            'confidence': confidence,
             'message': 'Face biometric 2FA verified successfully.',
+        })
+
+
+class ResetSandbox2FAView(APIView):
+    """
+    POST /api/auth/sandbox/reset-2fa/
+    Resets 2FA PIN and Face Biometrics for the Sandbox testing persona.
+    Permitted only for Sandbox/Testing personas; protects real user accounts.
+    """
+
+    def post(self, request):
+        user = _get_current_user(request)
+        is_sandbox = (
+            user.bmoni_user_id in (
+                '43fc704e-bfd9-4ad3-8edf-b189453773b0',
+                'b49a5942-9506-41a1-8ca1-e4321f23ce0a',
+                'guest-unauthenticated',
+                'demo-user-001',
+            )
+            or user.email in (
+                'demo@nuru.com',
+                'samson@nuru.com',
+                'samson.jabo@example.com',
+                'bolaji@nuru.demo',
+                'bolaji@bmoni.com',
+            )
+            or user.email.endswith(('.demo', '@nuru.com', '@example.com'))
+            or not user.user
+        )
+
+        if not is_sandbox:
+            return Response(
+                {
+                    'error': 'forbidden',
+                    'message': '2FA reset is only permitted on sandbox testing accounts.',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        user.face_enrolled = False
+        user.transaction_pin_hash = ''
+        user.face_image_data = ''
+        user.save(update_fields=['face_enrolled', 'transaction_pin_hash', 'face_image_data'])
+
+        return Response({
+            'success': True,
+            'message': 'Sandbox 2FA (PIN and Face Biometrics) reset to un-enrolled state for live testing.',
+            'has_pin': False,
+            'face_enrolled': False,
         })

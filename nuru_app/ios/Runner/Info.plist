@@ -58,7 +58,6 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -66,5 +65,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>NURU requires camera access to capture your face for biometric 2FA transaction verification.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NURU requires photo access to verify biometric face reference in simulation mode.</string>
 </dict>
 </plist>

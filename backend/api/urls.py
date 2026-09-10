@@ -37,6 +37,7 @@ from .views import (
     PinVerifyView,
     FaceEnrollView,
     FaceVerifyView,
+    ResetSandbox2FAView,
 )
 
 urlpatterns = [
@@ -75,6 +76,7 @@ urlpatterns = [
     path('auth/pin/verify/', PinVerifyView.as_view(), name='pin-verify'),
     path('auth/face/enroll/', FaceEnrollView.as_view(), name='face-enroll'),
     path('auth/face/verify/', FaceVerifyView.as_view(), name='face-verify'),
+    path('auth/sandbox/reset-2fa/', ResetSandbox2FAView.as_view(), name='sandbox-reset-2fa'),
 
     # Action endpoints
     path('action/transfer/', TransferActionView.as_view(), name='action-transfer'),

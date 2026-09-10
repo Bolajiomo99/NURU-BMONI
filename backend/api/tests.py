@@ -225,6 +225,40 @@ class SecurityAuthTestCase(BaseApiTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()['matched'])
 
+    def test_sandbox_reset_2fa(self):
+        # Setup PIN and face first
+        self.client.post('/api/auth/pin/setup/', {'pin': '8844'}, content_type='application/json')
+        self.client.post('/api/auth/face/enroll/', {'face_image': 'data:image/jpeg;base64,face_test'}, content_type='application/json')
+        
+        status = self.client.get('/api/auth/security-status/').json()
+        self.assertTrue(status['has_pin'])
+        self.assertTrue(status['face_enrolled'])
+
+        # Reset sandbox 2FA
+        resp = self.client.post('/api/auth/sandbox/reset-2fa/', {}, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_pin'])
+        self.assertFalse(data['face_enrolled'])
+
+        # Verify in DB and status
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.has_pin)
+        self.assertFalse(self.user.face_enrolled)
+        self.assertEqual(self.user.transaction_pin_hash, '')
+        self.assertEqual(self.user.face_image_data, '')
+
+    def test_sandbox_reset_forbidden_for_real_user(self):
+        # Create a non-sandbox customer profile
+        self.user.bmoni_user_id = 'nuru-real-customer-123'
+        self.user.email = 'customer@enterprise.com'
+        self.user.save(update_fields=['bmoni_user_id', 'email'])
+
+        resp = self.client.post('/api/auth/sandbox/reset-2fa/', {}, content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('error', resp.json())
+
     def test_transfer_action_step_label_is_security_policy_verification(self):
         payload = {
             'amount': '25.00',
