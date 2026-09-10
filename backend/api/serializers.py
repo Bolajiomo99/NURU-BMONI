@@ -4,7 +4,7 @@ DRF serializers for all API responses.
 """
 
 from rest_framework import serializers
-from .models import Transaction, ChatMessage, UserProfile
+from .models import ConnectedAccount, Transaction, ChatMessage, UserProfile
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -69,14 +69,28 @@ class FaceVerifySerializer(serializers.Serializer):
     face_image = serializers.CharField(help_text="Base64 encoded face image or data URI")
 
 
+class ConnectedAccountSerializer(serializers.ModelSerializer):
+    """Never exposes mono_access_token — the credential stays server-side."""
+
+    class Meta:
+        model = ConnectedAccount
+        fields = [
+            'id', 'provider', 'mono_account_id', 'institution_name',
+            'account_name', 'account_number_masked', 'status', 'created_at',
+        ]
+        read_only_fields = fields
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     has_pin = serializers.BooleanField(read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True, allow_null=True)
+    onboarding_complete = serializers.BooleanField(read_only=True)
+    smart_account_address = serializers.CharField(read_only=True, default='')
 
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'bmoni_user_id', 'first_name', 'last_name',
-            'email', 'phone_number', 'smart_wallet_id',
-            'wallet_address', 'onboarding_complete', 'created_at',
-            'has_pin', 'face_enrolled',
+            'id', 'user_id', 'bmoni_user_id', 'first_name', 'last_name',
+            'email', 'phone_number', 'created_at',
+            'onboarding_complete', 'has_pin', 'face_enrolled', 'smart_account_address',
         ]

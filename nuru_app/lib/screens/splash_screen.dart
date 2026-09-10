@@ -1,21 +1,32 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/auth_provider.dart';
+import '../routes/app_routes.dart';
 import '../theme/nuru_theme.dart';
-import 'bottom_nav_shell.dart';
+import '../widgets/nuru_primary_button.dart';
 
-class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+/// Branded landing screen and the app's entry point.
+///
+/// Renders synchronously — the brand mark is on the first frame, never a
+/// spinner — while [startupProvider] resolves the stored token in the
+/// background. Where "Get Started" leads depends on that result:
+/// signed out -> /auth, mid-onboarding -> the step they left off at,
+/// fully set up -> /home.
+class SplashScreen extends ConsumerStatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final AnimationController _slideController;
   Timer? _slideTimer;
+  bool _navigating = false;
 
   @override
   void initState() {
@@ -61,23 +72,43 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  void _navigateToDashboard() {
-    HapticFeedback.mediumImpact();
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondary) => const BottomNavShell(),
-        transitionsBuilder: (context, animation, secondary, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOut,
-            ),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 500),
-      ),
+  /// Where a returning user belongs. Falls back to the signed-out flow while
+  /// startup is still resolving, so the button is never dead.
+  String _destinationRoute() {
+    final startup = ref.read(startupProvider);
+    return startup.maybeWhen(
+      data: (state) {
+        switch (state.destination) {
+          case StartDestination.home:
+            return AppRoutes.home;
+          case StartDestination.onboarding:
+            return AppRoutes.fromOnboardingStep(state.onboardingStep) ??
+                AppRoutes.onboardingBusiness;
+          case StartDestination.auth:
+            return AppRoutes.authChoice;
+        }
+      },
+      orElse: () => AppRoutes.authChoice,
     );
+  }
+
+  Future<void> _continue() async {
+    if (_navigating) return;
+    setState(() => _navigating = true);
+    HapticFeedback.mediumImpact();
+
+    // Give the in-flight startup check a moment to land so a signed-in user
+    // is not bounced to /auth, but never block the tap on it.
+    try {
+      await ref
+          .read(startupProvider.future)
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Slow or failed: fall through to the signed-out flow.
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacementNamed(_destinationRoute());
   }
 
   @override
@@ -150,7 +181,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                       Text(
                                         'AI Financial Copilot',
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.w500,
                                           color: NuruTheme.primary,
                                           letterSpacing: 1.5,
@@ -235,56 +266,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               position: _staggerSlide(0.6, 1.0),
                               child: Column(
                                 children: [
-                                  SizedBox(
-                                    width: double.infinity,
+                                  NuruPrimaryButton(
+                                    label: 'Get Started',
+                                    icon: Icons.arrow_forward_rounded,
                                     height: 58,
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: NuruTheme.primaryGradient,
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: NuruTheme.primary.withValues(
-                                              alpha: 0.3,
-                                            ),
-                                            blurRadius: 20,
-                                            offset: const Offset(0, 8),
-                                          ),
-                                        ],
-                                      ),
-                                      child: ElevatedButton(
-                                        onPressed: _navigateToDashboard,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.transparent,
-                                          shadowColor: Colors.transparent,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                          ),
-                                        ),
-                                        child: const Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              'Get Started',
-                                              style: TextStyle(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF0A0E1A),
-                                              ),
-                                            ),
-                                            SizedBox(width: 10),
-                                            Icon(
-                                              Icons.arrow_forward_rounded,
-                                              color: Color(0xFF0A0E1A),
-                                              size: 20,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                    isLoading: _navigating,
+                                    onPressed: _continue,
                                   ),
                                   const SizedBox(height: 20),
                                   Row(
@@ -297,7 +284,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        'Secured by Multi-Sig Infrastructure',
+                                        'Bank-level encryption',
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: NuruTheme.textMuted,

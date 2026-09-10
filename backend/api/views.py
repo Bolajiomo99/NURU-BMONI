@@ -18,41 +18,27 @@ from .serializers import (
 )
 from .analytics import get_financial_summary, can_afford
 from .ai_engine import chat_with_nuru, explain_finances, get_ai_insight
-from .bmoni_client import BmoniClient
-from .phone_utils import normalize_phone_e164, InvalidPhoneNumberError
 from .seed_data import seed_demo_data
 
 logger = logging.getLogger(__name__)
 
 
-def _get_demo_user():
-    """Get or create the seeded demo user (Bolaji).
-
-    This is the fallback persona used when no real BMONI identity is
-    attached to the request — never mutated by a real login.
-    """
-    try:
-        user = UserProfile.objects.filter(email='bolaji@nuru.demo').first()
-        if not user or user.transactions.filter(description__contains='—').exists():
-            user = seed_demo_data()
-        return user
-    except Exception as e:
-        logger.error(f"Error fetching user, running migrations: {e}")
-        try:
-            from django.core.management import call_command
-            call_command('migrate', interactive=False)
-            return seed_demo_data()
-        except Exception as err:
-            logger.error(f"Migration fallback failed: {err}")
-            raise err
-
-
 def _get_current_user(request):
     """Resolve the acting UserProfile for this request.
 
-    If X-Bmoni-User-Id header is present, returns the authenticated user.
-    If absent, returns a guest profile with $0 balance (Option A).
+    Precedence:
+      1. A valid auth token — the real identity.
+      2. The legacy X-Bmoni-User-Id header, consulted only when unauthenticated.
+         Read-only; see _require_write_access.
+      3. A guest profile with $0 balance.
     """
+    if request.user and request.user.is_authenticated:
+        profile = UserProfile.objects.filter(user=request.user).first()
+        if profile:
+            return profile
+        from .auth_utils import ensure_user_profile
+        return ensure_user_profile(request.user)
+
     header_id = request.headers.get('X-Bmoni-User-Id', '').strip()
     if header_id:
         # Known Sandbox Persona fast-resolutions
@@ -110,10 +96,30 @@ def _get_current_user(request):
             'last_name': 'User',
             'email': 'guest@nuru.app',
             'phone_number': '',
-            'onboarding_complete': False,
         }
     )
     return guest_user
+
+
+def _require_write_access(request, user):
+    """Return an error Response if this request may not mutate `user`, else None.
+
+    The legacy header identifies a profile without proving anything, so it
+    grants read access only. Guests keep their existing behavior — they act on
+    their own throwaway profile, which is harmless.
+    """
+    if request.user and request.user.is_authenticated:
+        return None
+    header_id = request.headers.get('X-Bmoni-User-Id', '').strip()
+    if header_id and user.bmoni_user_id == header_id:
+        return Response(
+            {
+                'error': 'read_only',
+                'message': 'Log in to perform this action.',
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
 
 
 class DashboardView(APIView):
@@ -134,7 +140,6 @@ class DashboardView(APIView):
                         'first_name': 'Guest',
                         'last_name': '',
                         'bmoni_user_id': '',
-                        'onboarding_complete': False,
                     },
                     'health_score': 0,
                     'health_status': 'Not Connected',
@@ -178,7 +183,6 @@ class DashboardView(APIView):
                     'first_name': user.first_name,
                     'last_name': user.last_name,
                     'bmoni_user_id': user.bmoni_user_id,
-                    'onboarding_complete': user.onboarding_complete,
                 },
                 'health_score': summary['health_score'],
                 'health_status': summary['health_status'],
@@ -197,7 +201,6 @@ class DashboardView(APIView):
                 {'error': 'Could not load dashboard data.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 
 class ChatView(APIView):
@@ -277,6 +280,10 @@ class TransferActionView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         user = _get_current_user(request)
+        denied = _require_write_access(request, user)
+        if denied is not None:
+            return denied
+
         data = serializer.validated_data
 
         account_number = data.get('account_number', '').strip()
@@ -374,6 +381,10 @@ class SwapActionView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         user = _get_current_user(request)
+        denied = _require_write_access(request, user)
+        if denied is not None:
+            return denied
+
         data = serializer.validated_data
 
         steps = [
@@ -800,7 +811,6 @@ class BmoniLoginView(APIView):
                     last_name=last_name,
                     email=email or f"user_{resolved_bmoni_user_id[:8]}@bmoni.com",
                     phone_number=phone_number,
-                    onboarding_complete=True,
                 )
             else:
                 user.bmoni_user_id = resolved_bmoni_user_id
@@ -810,7 +820,6 @@ class BmoniLoginView(APIView):
                     user.email = email
                 if phone_number:
                     user.phone_number = phone_number
-                user.onboarding_complete = True
                 user.save()
 
             # Seed initial transactions if brand new user profile
@@ -985,4 +994,3 @@ class FaceVerifyView(APIView):
             'confidence': 0.98,
             'message': 'Face biometric 2FA verified successfully.',
         })
-

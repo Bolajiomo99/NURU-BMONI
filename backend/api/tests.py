@@ -7,7 +7,9 @@ import os
 from decimal import Decimal
 from unittest import mock
 
+from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from rest_framework.authtoken.models import Token
 
 import api.ai_engine as ai_engine
 from .analytics import get_financial_summary
@@ -23,6 +25,18 @@ class BaseApiTestCase(TestCase):
     def setUp(self):
         self.user = seed_demo_data()
         self.client.defaults['HTTP_X_BMONI_USER_ID'] = self.user.bmoni_user_id
+        # Identity comes from the auth token. Link the seeded profile to a real
+        # account so these tests act as Bolaji rather than as the zero-balance
+        # guest profile that unauthenticated requests now resolve to.
+        self.auth_user = User.objects.create_user(
+            username=self.user.email,
+            email=self.user.email,
+            password='demo-pass-123',
+        )
+        self.user.user = self.auth_user
+        self.user.save(update_fields=['user'])
+        self.token = Token.objects.create(user=self.auth_user)
+        self.client.defaults['HTTP_AUTHORIZATION'] = f'Token {self.token.key}'
 
 
 class DashboardTestCase(BaseApiTestCase):
@@ -39,6 +53,19 @@ class DashboardTestCase(BaseApiTestCase):
         self.assertIsInstance(data['recent_transactions'], list)
         self.assertIsInstance(data['categories'], list)
         self.assertTrue(data['safe_weekly_spend_usd'] > 0)
+
+
+class GuestDashboardTestCase(BaseApiTestCase):
+    """Option A: an unauthenticated caller sees zeros, not someone else's money."""
+
+    def test_unauthenticated_dashboard_is_empty(self):
+        self.client.defaults.pop('HTTP_AUTHORIZATION', None)
+        self.client.defaults.pop('HTTP_X_BMONI_USER_ID', None)
+        resp = self.client.get('/api/dashboard/')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(_round(data['balances']['usd']), 0.0)
+        self.assertEqual(_round(data['balances']['ngn']), 0.0)
 
 
 class AffordabilityTestCase(BaseApiTestCase):

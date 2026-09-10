@@ -11,8 +11,8 @@ class UserInfo {
     required this.lastName,
     required this.email,
     required this.phoneNumber,
-    required this.bmoniUserId,
-    required this.onboardingComplete,
+    this.bmoniUserId = '',
+    this.onboardingComplete = false,
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {

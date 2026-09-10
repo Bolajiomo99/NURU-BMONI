@@ -5,9 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_data.dart';
 import '../models/chat_message.dart';
 
-/// Thrown when a BMONI login lookup (by user ID or phone) comes back 404 -
-/// distinct from a network/server error so the UI can show the
-/// "no BMONI account found" state instead of a generic failure toast.
 class BmoniAccountNotFoundException implements Exception {
   final String message;
   BmoniAccountNotFoundException(this.message);
@@ -16,82 +13,49 @@ class BmoniAccountNotFoundException implements Exception {
 }
 
 class ApiService {
-  static const String _urlKey = 'nuru_backend_api_url';
-  static const String _currentUserIdKey = 'nuru_current_bmoni_user_id';
-  static String? _cachedUrl;
+  /// Backend API base URL — a build-time value, not a runtime guess.
+  ///
+  /// Defaults to the deployed Railway URL (production is unaffected unless
+  /// a build explicitly overrides it). For local dev, pass
+  /// --dart-define=API_URL=http://localhost:8000/api at build/run time.
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://nuru-bmoni.up.railway.app/api',
+  );
+
+  static const String authTokenKey = 'nuru_auth_token';
+  static String? _cachedAuthToken;
+
+  static const String _currentUserIdKey = 'current_bmoni_user_id';
   static String? _cachedCurrentUserId;
+  static String? _cachedUrl;
 
-  /// Candidate URLs to test if primary fails
-  static List<String> get _candidateUrls {
-    final list = <String>[];
-    if (kIsWeb) {
-      final webOrigin = Uri.base.origin;
-      if (webOrigin.isNotEmpty && webOrigin != 'null') {
-        list.add('$webOrigin/api');
-      }
+  /// The DRF auth token for the signed-in account, or null when signed out.
+  static Future<String?> getAuthToken() async {
+    if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
+      return _cachedAuthToken;
     }
-    list.add('https://nuru.up.railway.app/api');
-    return list.toSet().toList();
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(authTokenKey);
+    _cachedAuthToken = token;
+    return (token != null && token.isNotEmpty) ? token : null;
   }
 
-  /// Get active API base URL
-  static Future<String> getBaseUrl() async {
-    if (_cachedUrl != null &&
-        _cachedUrl!.isNotEmpty &&
-        !_cachedUrl!.contains('nuru-bmoni')) {
-      return _cachedUrl!;
-    }
-
-    if (kIsWeb) {
-      final webOrigin = Uri.base.origin;
-      if (webOrigin.isNotEmpty && webOrigin != 'null') {
-        _cachedUrl = '$webOrigin/api';
-        return _cachedUrl!;
-      }
-    }
-
+  static Future<void> setAuthToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString(_urlKey);
-
-    if (savedUrl != null &&
-        savedUrl.isNotEmpty &&
-        !savedUrl.contains('nuru-bmoni') &&
-        !savedUrl.contains('192.168.') &&
-        !savedUrl.contains('localhost') &&
-        !savedUrl.contains('127.0.0.1') &&
-        !savedUrl.contains('10.0.2.2')) {
-      _cachedUrl = savedUrl;
-      return savedUrl;
-    }
-
-    _cachedUrl = 'https://nuru.up.railway.app/api';
-    await prefs.setString(_urlKey, _cachedUrl!);
-    return _cachedUrl!;
+    await prefs.setString(authTokenKey, token);
+    _cachedAuthToken = token;
   }
 
-  /// Update backend URL for physical device testing
-  static Future<void> setBaseUrl(String newUrl) async {
-    String formatted = newUrl.trim();
-    if (formatted.endsWith('/')) {
-      formatted = formatted.substring(0, formatted.length - 1);
-    }
-    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
-      formatted = 'http://$formatted';
-    }
-    if (!formatted.endsWith('/api')) {
-      formatted = '$formatted/api';
-    }
-
+  static Future<void> clearAuthToken() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_urlKey, formatted);
-    _cachedUrl = formatted;
-    debugPrint('⚙️ Updated NURU backend URL to: $formatted');
+    await prefs.remove(authTokenKey);
+    _cachedAuthToken = null;
   }
 
   /// The bmoni_user_id of whoever last logged in via [loginBmoniUser], sent
   /// on every subsequent request so the backend knows who "current user"
-  /// means. Null before any real login - the backend then falls back to
-  /// its seeded demo persona.
+  /// means. Defaults to Samson Jabo if unset.
   static Future<String?> getCurrentUserId() async {
     if (_cachedCurrentUserId != null && _cachedCurrentUserId!.isNotEmpty) {
       return _cachedCurrentUserId;
@@ -105,10 +69,32 @@ class ApiService {
     return _cachedCurrentUserId;
   }
 
-  static Future<void> _setCurrentUserId(String bmoniUserId) async {
+  static Future<void> setCurrentUserId(String bmoniUserId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_currentUserIdKey, bmoniUserId);
     _cachedCurrentUserId = bmoniUserId;
+  }
+
+  /// Get active API base URL (detecting same-origin web or configured default)
+  static Future<String> getBaseUrl() async {
+    if (_cachedUrl != null && _cachedUrl!.isNotEmpty) {
+      return _cachedUrl!;
+    }
+    if (kIsWeb) {
+      final webOrigin = Uri.base.origin;
+      if (webOrigin.isNotEmpty && webOrigin != 'null' && !webOrigin.startsWith('file://')) {
+        _cachedUrl = '$webOrigin/api';
+        return _cachedUrl!;
+      }
+    }
+    _cachedUrl = baseUrl;
+    return _cachedUrl!;
+  }
+
+  static Future<void> setBaseUrl(String url) async {
+    _cachedUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('nuru_backend_api_url', url);
   }
 
   static Future<Map<String, String>> get _headers async {
@@ -116,6 +102,10 @@ class ApiService {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+    final token = await getAuthToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Token $token';
+    }
     final userId = await getCurrentUserId();
     if (userId != null && userId.isNotEmpty) {
       headers['X-Bmoni-User-Id'] = userId;
@@ -123,101 +113,30 @@ class ApiService {
     return headers;
   }
 
-  /// Helper to execute GET with auto-fallback to alternate URLs if connection fails.
-  /// Returns the response even for non-200 status codes so callers can handle them.
-  static Future<http.Response> _getWithFallback(
+  static Future<http.Response> _get(
     String path, {
-    Duration timeout = const Duration(seconds: 18),
+    Duration timeout = const Duration(seconds: 20),
   }) async {
-    final primary = await getBaseUrl();
-
-    try {
-      final res = await http
-          .get(Uri.parse('$primary$path'), headers: await _headers)
-          .timeout(timeout);
-      _cachedUrl = primary;
-      return res;
-    } catch (e) {
-      if (primary.startsWith('https://') && '$e'.contains('TimeoutException')) {
-        throw Exception('Analysis is taking longer than expected. Please try again.');
-      }
-
-      final urls = _candidateUrls.where((u) => u != primary).toList();
-      Object? lastException = e;
-      for (final base in urls) {
-        if (kIsWeb && primary.startsWith('https://') && base.startsWith('http://')) {
-          continue;
-        }
-        try {
-          final res = await http
-              .get(Uri.parse('$base$path'), headers: await _headers)
-              .timeout(const Duration(seconds: 12));
-          _cachedUrl = base;
-          return res;
-        } catch (err) {
-          lastException = err;
-        }
-      }
-      throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
-    }
+    final base = await getBaseUrl();
+    return http
+        .get(Uri.parse('$base$path'), headers: await _headers)
+        .timeout(timeout);
   }
 
-  /// Helper to execute POST with auto-fallback to alternate URLs if connection fails.
-  /// Returns the response even for non-200 status codes so callers can
-  /// handle 404, 400, 502, etc. — only network/socket errors trigger fallback.
-  static Future<http.Response> _postWithFallback(
+  static Future<http.Response> _post(
     String path,
     Map<String, dynamic> body, {
     Duration timeout = const Duration(seconds: 25),
   }) async {
-    final primary = await getBaseUrl();
-
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$primary$path'),
-            headers: await _headers,
-            body: jsonEncode(body),
-          )
-          .timeout(timeout);
-      _cachedUrl = primary;
-      return res;
-    } catch (e) {
-      if (primary.startsWith('https://') && '$e'.contains('TimeoutException')) {
-        throw Exception('Request timed out. Please try again.');
-      }
-
-      final urls = _candidateUrls.where((u) => u != primary).toList();
-      Object? lastException = e;
-      for (final base in urls) {
-        if (kIsWeb && primary.startsWith('https://') && base.startsWith('http://')) {
-          continue;
-        }
-        try {
-          final res = await http
-              .post(
-                Uri.parse('$base$path'),
-                headers: await _headers,
-                body: jsonEncode(body),
-              )
-              .timeout(const Duration(seconds: 15));
-          _cachedUrl = base;
-          return res;
-        } catch (err) {
-          lastException = err;
-        }
-      }
-      throw Exception('Unable to reach NURU servers. Please check connection ($lastException)');
-    }
+    final base = await getBaseUrl();
+    return http
+        .post(Uri.parse('$base$path'), headers: await _headers, body: jsonEncode(body))
+        .timeout(timeout);
   }
 
   /// Fetch dashboard summary
   static Future<DashboardData> fetchDashboard() async {
-    final url = await getBaseUrl();
-    final uid = await getCurrentUserId();
-    debugPrint('🔍 fetchDashboard URL: $url | userId: $uid');
-    final response = await _getWithFallback('/dashboard/');
-    debugPrint('🔍 fetchDashboard code: ${response.statusCode} | body: ${response.body.substring(0, response.body.length > 300 ? 300 : response.body.length)}');
+    final response = await _get('/dashboard/');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -229,7 +148,7 @@ class ApiService {
 
   /// Send message to NURU AI
   static Future<ChatMessageItem> sendMessage(String message) async {
-    final response = await _postWithFallback(
+    final response = await _post(
       '/chat/',
       {'message': message},
       timeout: const Duration(seconds: 25),
@@ -245,7 +164,7 @@ class ApiService {
 
   /// Get chat history
   static Future<List<ChatMessageItem>> fetchChatHistory() async {
-    final response = await _getWithFallback('/chat/');
+    final response = await _get('/chat/');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -258,15 +177,15 @@ class ApiService {
 
   /// Clear chat history
   static Future<void> clearChatHistory() async {
-    final url = await getBaseUrl();
-    await http.delete(Uri.parse('$url/chat/'), headers: await _headers);
+    final base = await getBaseUrl();
+    await http.delete(Uri.parse('$base/chat/'), headers: await _headers);
   }
 
   /// Generate Explain My Money story
   static Future<Map<String, dynamic>> explainFinances() async {
-    final response = await _getWithFallback(
+    final response = await _get(
       '/explain/',
-      timeout: const Duration(seconds: 30),
+      timeout: const Duration(seconds: 25),
     );
 
     if (response.statusCode == 200) {
@@ -286,7 +205,7 @@ class ApiService {
     String accountName = '',
     String description = '',
   }) async {
-    final response = await _postWithFallback('/action/transfer/', {
+    final response = await _post('/action/transfer/', {
       'amount': amount,
       'currency': currency,
       'to_address': toAddress,
@@ -309,7 +228,7 @@ class ApiService {
     required String fromCurrency,
     required String toCurrency,
   }) async {
-    final response = await _postWithFallback('/action/swap/', {
+    final response = await _post('/action/swap/', {
       'amount': amount,
       'from_currency': fromCurrency,
       'to_currency': toCurrency,
@@ -322,7 +241,43 @@ class ApiService {
     }
   }
 
-  /// Register / Connect BMONI Account & Perform BVN Onboarding
+  /// Connect / Log in BMONI user
+  static Future<Map<String, dynamic>> loginBmoniUser({
+    String? identifier,
+    String? bmoniUserId,
+    String? phoneNumber,
+  }) async {
+    final input = identifier ?? bmoniUserId ?? phoneNumber ?? '';
+    final response = await _post('/bmoni/login/', {
+      'identifier': input,
+      'bmoni_user_id': bmoniUserId ?? '',
+      'phone_number': phoneNumber ?? '',
+    });
+
+    Map<String, dynamic> jsonBody = {};
+    try {
+      if (response.body.trim().startsWith('{' )) {
+        jsonBody = jsonDecode(response.body);
+      }
+    } catch (_) {}
+
+    if (response.statusCode == 200) {
+      final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
+      if (resolvedId != null && resolvedId.isNotEmpty) {
+        await setCurrentUserId(resolvedId);
+      }
+      return jsonBody;
+    } else if (response.statusCode == 404) {
+      throw BmoniAccountNotFoundException(
+        jsonBody['message'] as String? ?? 'No BMONI account found.',
+      );
+    } else {
+      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Login failed. Please try again.';
+      throw Exception(msg);
+    }
+  }
+
+  /// Register a user in BMONI system with BVN
   static Future<Map<String, dynamic>> registerBmoniUser({
     required String firstName,
     required String lastName,
@@ -330,7 +285,7 @@ class ApiService {
     required String phoneNumber,
     required String bvn,
   }) async {
-    final response = await _postWithFallback('/bmoni/user/', {
+    final response = await _post('/bmoni/user/', {
       'first_name': firstName,
       'last_name': lastName,
       'email': email,
@@ -348,58 +303,21 @@ class ApiService {
     if (response.statusCode == 200) {
       final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
       if (resolvedId != null && resolvedId.isNotEmpty) {
-        await _setCurrentUserId(resolvedId);
+        await setCurrentUserId(resolvedId);
       }
       return jsonBody;
     } else {
-      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Registration could not be completed. Please try again.';
+      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Registration failed. Please try again.';
       throw Exception(msg);
     }
   }
 
-  /// Connect / Log in existing BMONI user using Phone Number, Email, Name, or BMONI User ID
-  static Future<Map<String, dynamic>> loginBmoniUser({
-    String? identifier,
-    String? bmoniUserId,
-    String? phoneNumber,
-  }) async {
-    final input = identifier ?? bmoniUserId ?? phoneNumber ?? '';
-    final response = await _postWithFallback('/bmoni/login/', {
-      'identifier': input,
-      'bmoni_user_id': bmoniUserId ?? '',
-      'phone_number': phoneNumber ?? '',
-    });
-
-    Map<String, dynamic> jsonBody = {};
-    try {
-      if (response.body.trim().startsWith('{')) {
-        jsonBody = jsonDecode(response.body);
-      }
-    } catch (_) {}
-
-    if (response.statusCode == 200) {
-      final resolvedId = jsonBody['user']?['bmoni_user_id'] as String?;
-      if (resolvedId != null && resolvedId.isNotEmpty) {
-        await _setCurrentUserId(resolvedId);
-      }
-      return jsonBody;
-    } else if (response.statusCode == 404) {
-      throw BmoniAccountNotFoundException(
-        jsonBody['message'] as String? ??
-            'No BMONI account found for that phone number, email, or identifier.',
-      );
-    } else {
-      final msg = jsonBody['message'] ?? jsonBody['error'] ?? 'Login failed. Please try again.';
-      throw Exception(msg);
-    }
-  }
-
-  /// Reset session context back to unauthenticated guest mode and clear cached URLs
+  /// Reset session context back to unauthenticated guest mode
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_urlKey);
+    await prefs.remove(authTokenKey);
     await prefs.setString(_currentUserIdKey, '');
-    _cachedUrl = null;
+    _cachedAuthToken = null;
     _cachedCurrentUserId = null;
   }
 
@@ -408,7 +326,7 @@ class ApiService {
   /// Get 2FA security status (has_pin, face_enrolled)
   static Future<Map<String, dynamic>> getSecurityStatus() async {
     try {
-      final response = await _getWithFallback('/auth/security-status/');
+      final response = await _get('/auth/security-status/');
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -420,7 +338,7 @@ class ApiService {
 
   /// Create and hash initial transaction PIN
   static Future<Map<String, dynamic>> setupTransactionPin(String pin) async {
-    final response = await _postWithFallback('/auth/pin/setup/', {'pin': pin});
+    final response = await _post('/auth/pin/setup/', {'pin': pin});
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
       return data;
@@ -430,7 +348,7 @@ class ApiService {
 
   /// Verify transaction PIN against stored hash
   static Future<Map<String, dynamic>> verifyTransactionPin(String pin) async {
-    final response = await _postWithFallback('/auth/pin/verify/', {'pin': pin});
+    final response = await _post('/auth/pin/verify/', {'pin': pin});
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
       return data;
@@ -440,7 +358,7 @@ class ApiService {
 
   /// Enroll reference face image for 2FA
   static Future<Map<String, dynamic>> enrollFace(String base64Image) async {
-    final response = await _postWithFallback('/auth/face/enroll/', {'face_image': base64Image});
+    final response = await _post('/auth/face/enroll/', {'face_image': base64Image});
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
       return data;
@@ -450,7 +368,7 @@ class ApiService {
 
   /// Verify live face image for 2FA
   static Future<Map<String, dynamic>> verifyFace(String base64Image) async {
-    final response = await _postWithFallback('/auth/face/verify/', {'face_image': base64Image});
+    final response = await _post('/auth/face/verify/', {'face_image': base64Image});
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
       return data;

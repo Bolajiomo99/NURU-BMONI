@@ -3,6 +3,7 @@ API App Config
 Executes database migrations and initial demo seeding automatically on startup.
 """
 
+import os
 import sys
 import logging
 from django.apps import AppConfig
@@ -18,6 +19,13 @@ class ApiConfig(AppConfig):
         """Auto-run migrations and seed initial data if DB tables do not exist."""
         # Skip during management commands like makemigrations/migrate/check
         if any(cmd in sys.argv for cmd in ('makemigrations', 'migrate', 'test', 'check', 'collectstatic')):
+            return
+
+        # On a real database, every gunicorn worker would call migrate() here
+        # at import time with no cross-process lock. The bare except below
+        # would then hide a half-applied schema. The Procfile owns migration
+        # in that world; set AUTO_MIGRATE=True to opt back in.
+        if os.getenv('DATABASE_URL') and os.getenv('AUTO_MIGRATE', 'False') != 'True':
             return
 
         try:

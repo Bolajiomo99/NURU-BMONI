@@ -217,7 +217,6 @@ def seed_demo_data():
         last_name='Omo',
         email='bolaji@nuru.demo',
         phone_number='+2348000000000',
-        onboarding_complete=True,
     )
 
     return seed_user_transactions(user, force_reset=True)

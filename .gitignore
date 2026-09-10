@@ -34,3 +34,4 @@ nuru_app/windows/
 .vscode/
 .idea/
 *.log
+.gstack/

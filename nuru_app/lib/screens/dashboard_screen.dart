@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../theme/nuru_theme.dart';
 import '../models/dashboard_data.dart';
@@ -21,7 +20,6 @@ class DashboardScreen extends ConsumerWidget {
         loading: () => const _ShimmerDashboard(),
         error: (err, st) => _ErrorView(
           onRetry: () => ref.invalidate(dashboardProvider),
-          onSettings: () => _showServerSettingsDialog(context, ref),
         ),
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.refresh(dashboardProvider),
@@ -924,20 +922,18 @@ class DashboardScreen extends ConsumerWidget {
 class _DashboardContent extends StatelessWidget {
   final DashboardData data;
   final VoidCallback onExplain;
-  final VoidCallback onSettings;
-  final VoidCallback onBmoniSignup;
+  final VoidCallback? onSettings;
+  final VoidCallback? onBmoniSignup;
 
   const _DashboardContent({
     required this.data,
     required this.onExplain,
-    required this.onSettings,
-    required this.onBmoniSignup,
+    this.onSettings,
+    this.onBmoniSignup,
   });
 
   @override
   Widget build(BuildContext context) {
-    final currFmt = NumberFormat('#,##0.00');
-
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
@@ -945,26 +941,14 @@ class _DashboardContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 16, 24, 0),
-            child: _Header(
-              user: data.user,
-              onSettings: onSettings,
-              onBmoniSignup: onBmoniSignup,
-            ),
-          ),
-        ),
-
-        // ─── Balance Card ───────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-            child: _BalanceCard(balances: data.balances, currFmt: currFmt),
+            child: _Header(user: data.user, onBmoniSignup: onBmoniSignup),
           ),
         ),
 
         // ─── Health + Monthly Row ───────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
             child: Row(
               children: [
                 Expanded(
@@ -1063,14 +1047,9 @@ class _DashboardContent extends StatelessWidget {
 // ─── Header with avatar ────────────────────────────────────────────
 class _Header extends StatelessWidget {
   final UserInfo user;
-  final VoidCallback onSettings;
-  final VoidCallback onBmoniSignup;
+  final VoidCallback? onBmoniSignup;
 
-  const _Header({
-    required this.user,
-    required this.onSettings,
-    required this.onBmoniSignup,
-  });
+  const _Header({required this.user, this.onBmoniSignup});
 
   @override
   Widget build(BuildContext context) {
@@ -1144,227 +1123,11 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
-        GestureDetector(
-          onTap: onBmoniSignup,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: user.onboardingComplete
-                  ? NuruTheme.healthyGreen.withValues(alpha: 0.15)
-                  : NuruTheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: user.onboardingComplete
-                    ? NuruTheme.healthyGreen.withValues(alpha: 0.4)
-                    : NuruTheme.primary.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  user.onboardingComplete
-                      ? Icons.verified_user_rounded
-                      : Icons.badge_outlined,
-                  color: user.onboardingComplete
-                      ? NuruTheme.healthyGreen
-                      : NuruTheme.primary,
-                  size: 16,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  user.onboardingComplete ? 'BMONI Live' : 'Verify BVN',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: user.onboardingComplete
-                        ? NuruTheme.healthyGreen
-                        : NuruTheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: onSettings,
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: NuruTheme.surfaceLight,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.settings_rounded,
-              color: NuruTheme.textSecondary,
-              size: 20,
-            ),
-          ),
-        ),
       ],
     );
   }
 }
 
-// ─── Balance Card ──────────────────────────────────────────────────
-class _BalanceCard extends StatefulWidget {
-  final Balances balances;
-  final NumberFormat currFmt;
-
-  const _BalanceCard({required this.balances, required this.currFmt});
-
-  @override
-  State<_BalanceCard> createState() => _BalanceCardState();
-}
-
-class _BalanceCardState extends State<_BalanceCard> {
-  bool _hidden = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: NuruTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: NuruTheme.primary.withValues(alpha: 0.2),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Total Balance',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white70,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  setState(() => _hidden = !_hidden);
-                },
-                child: Icon(
-                  _hidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  color: Colors.white60,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: Text(
-              _hidden
-                  ? '••••••'
-                  : '\$${widget.currFmt.format(widget.balances.totalUsdEquivalent)}',
-              key: ValueKey(_hidden),
-              style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            height: 1,
-            color: Colors.white.withValues(alpha: 0.15),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _CurrencyPill(
-                flag: '🇺🇸',
-                label: 'USD',
-                amount: _hidden
-                    ? '••••'
-                    : '\$${widget.currFmt.format(widget.balances.usd)}',
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 1,
-                height: 32,
-                color: Colors.white.withValues(alpha: 0.15),
-              ),
-              const SizedBox(width: 12),
-              _CurrencyPill(
-                flag: '🇳🇬',
-                label: 'NGN',
-                amount: _hidden
-                    ? '••••'
-                    : '₦${widget.currFmt.format(widget.balances.ngn)}',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CurrencyPill extends StatelessWidget {
-  final String flag;
-  final String label;
-  final String amount;
-
-  const _CurrencyPill({
-    required this.flag,
-    required this.label,
-    required this.amount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        children: [
-          Text(flag, style: const TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white60,
-                  ),
-                ),
-                Text(
-                  amount,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Health Score Card with Custom Arc ──────────────────────────────
 class _HealthCard extends StatelessWidget {
@@ -1745,9 +1508,8 @@ class _TransactionTile extends StatelessWidget {
 // ─── Error View ────────────────────────────────────────────────────
 class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
-  final VoidCallback onSettings;
 
-  const _ErrorView({required this.onRetry, required this.onSettings});
+  const _ErrorView({required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1821,21 +1583,6 @@ class _ErrorView extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: onSettings,
-                    icon: const Icon(Icons.settings_rounded, size: 18),
-                    label: const Text('Settings'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: NuruTheme.textSecondary,
-                      side: const BorderSide(color: NuruTheme.surfaceLight),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ],
@@ -1876,9 +1623,6 @@ class _ShimmerDashboard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              // Balance card skeleton
-              _shimmerBox(double.infinity, 170, 24),
-              const SizedBox(height: 16),
               // Health + Monthly row
               Row(
                 children: [
