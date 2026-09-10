@@ -93,6 +93,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 28),
                 NuruFormBanner(message: _error),
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: NuruTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: NuruTheme.primary.withValues(alpha: 0.35)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.verified_user_rounded, size: 16, color: NuruTheme.primary),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Testing Login (Banks & Loans Linked)',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: NuruTheme.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Email: demo@nuru.com  •  Pass: Password123!',
+                        style: TextStyle(fontSize: 12, color: NuruTheme.textSecondary),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.flash_on_rounded, size: 16, color: NuruTheme.primary),
+                          label: const Text(
+                            'Quick Fill Test Credentials',
+                            style: TextStyle(color: NuruTheme.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: NuruTheme.primary.withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _emailCtrl.text = 'demo@nuru.com';
+                              _passwordCtrl.text = 'Password123!';
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 NuruTextField(
                   label: 'Email',
                   controller: _emailCtrl,

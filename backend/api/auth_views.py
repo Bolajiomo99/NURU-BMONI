@@ -179,6 +179,10 @@ class LoginView(APIView):
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
 
+        if email in ('demo@nuru.com', 'samson@nuru.com'):
+            from .seed_data import seed_demo_onboarded_user
+            seed_demo_onboarded_user()
+
         user = authenticate(request, username=email, password=password)
         if user is None:
             # authenticate() returns None for inactive users too, so check

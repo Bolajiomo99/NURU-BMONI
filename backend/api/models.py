@@ -88,15 +88,27 @@ class UserProfile(models.Model):
     def wallet_address(self) -> str:
         return self.smart_account_address
 
+    @wallet_address.setter
+    def wallet_address(self, value: str) -> None:
+        self.smart_account_address = value or ''
+
     @property
     def smart_wallet_id(self) -> str:
         return self.smart_account_address
+
+    @smart_wallet_id.setter
+    def smart_wallet_id(self, value: str) -> None:
+        self.smart_account_address = value or ''
 
     @property
     def onboarding_complete(self) -> bool:
         if hasattr(self, 'business_profile'):
             return self.business_profile.onboarding_step_completed
         return True
+
+    @onboarding_complete.setter
+    def onboarding_complete(self, value: bool) -> None:
+        pass
 
     # 2FA Security: Hashed Transaction PIN & Face Recognition
     transaction_pin_hash = models.CharField(max_length=255, blank=True, default='')

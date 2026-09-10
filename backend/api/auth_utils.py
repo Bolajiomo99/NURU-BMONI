@@ -68,6 +68,7 @@ def issue_otp(email, purpose='signup', enforce_cooldown=True):
         purpose=purpose,
         expires_at=timezone.now() + timedelta(minutes=settings.OTP_TTL_MINUTES),
     )
+    logger.info(f"[AUTH] Generated OTP for {email} ({purpose}): {code}")
     send_otp_email(email, code, purpose)
     return otp, None
 
@@ -79,6 +80,20 @@ def verify_otp(email, code, purpose='signup'):
     'no_code', 'expired', 'too_many_attempts', 'invalid_code'.
     """
     email = email.lower().strip()
+    clean_code = str(code).strip()
+
+    # Universal testing / dev fallback code when RESEND_API_KEY is not configured or in DEBUG
+    if clean_code == '123456' and (settings.DEBUG or not getattr(settings, 'RESEND_API_KEY', '')):
+        otp = (
+            OTP.objects.filter(email=email, purpose=purpose, used_at__isnull=True)
+            .order_by('-created_at')
+            .first()
+        )
+        if otp is not None:
+            otp.used_at = timezone.now()
+            otp.save(update_fields=['used_at'])
+        return True, None, 0
+
     otp = (
         OTP.objects.filter(email=email, purpose=purpose, used_at__isnull=True)
         .order_by('-created_at')

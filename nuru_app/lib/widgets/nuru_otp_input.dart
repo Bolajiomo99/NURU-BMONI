@@ -179,6 +179,17 @@ class NuruOtpInputState extends State<NuruOtpInput> {
                     autofocus: i == 0,
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
+                    enableInteractiveSelection: true,
+                    contextMenuBuilder: (context, editableTextState) {
+                      final items = editableTextState.contextMenuButtonItems;
+                      items.removeWhere(
+                        (item) => item.type == ContextMenuButtonType.liveTextInput,
+                      );
+                      return AdaptiveTextSelectionToolbar.buttonItems(
+                        anchors: editableTextState.contextMenuAnchors,
+                        buttonItems: items,
+                      );
+                    },
                     // No maxLength/1-char formatter: a pasted code must reach
                     // _distribute intact instead of being truncated.
                     style: const TextStyle(

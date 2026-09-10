@@ -360,3 +360,181 @@ def seed_samson_transactions(user, force_reset=False):
 
     print(f"Seeded {len(transactions)} Nigerian transactions for Samson Jabo ({user.bmoni_user_id})")
     return user
+
+
+def seed_demo_onboarded_user():
+    """
+    Creates/updates a fully onboarded test persona:
+      - Email: demo@nuru.com / samson@nuru.com
+      - Password: Password123!
+      - Persona: Samson Jabo
+      - Completed BusinessProfile (Samson Tech & Agro-Logistics)
+      - Active BusinessGoals (Warehouse expansion, dispatch van fleet)
+      - Connected Accounts (3 commercial banks: Access Bank, GTBank, Zenith Bank)
+      - Active Loans (FairMoney SME Facility, Lapo Microfinance)
+      - Full Nigerian transactions & balances ($2,305.55 / ₦3,500,000)
+      - PIN 1234, Face recognition enrolled
+    """
+    from django.contrib.auth.models import User
+    from rest_framework.authtoken.models import Token
+    from .models import (
+        UserProfile, BusinessProfile, BusinessGoal, Loan, ConnectedAccount
+    )
+
+    email = 'demo@nuru.com'
+    auth_user, _ = User.objects.get_or_create(
+        username=email,
+        defaults={
+            'email': email,
+            'first_name': 'Samson',
+            'last_name': 'Jabo',
+            'is_active': True,
+        }
+    )
+    auth_user.set_password('Password123!')
+    auth_user.first_name = 'Samson'
+    auth_user.last_name = 'Jabo'
+    auth_user.email = email
+    auth_user.is_active = True
+    auth_user.save()
+
+    Token.objects.get_or_create(user=auth_user)
+
+    # Also make sure samson@nuru.com works with the same password
+    alt_user, _ = User.objects.get_or_create(
+        username='samson@nuru.com',
+        defaults={
+            'email': 'samson@nuru.com',
+            'first_name': 'Samson',
+            'last_name': 'Jabo',
+            'is_active': True,
+        }
+    )
+    alt_user.set_password('Password123!')
+    alt_user.is_active = True
+    alt_user.save()
+    Token.objects.get_or_create(user=alt_user)
+
+    # Link UserProfile
+    profile, _ = UserProfile.objects.get_or_create(
+        bmoni_user_id='43fc704e-bfd9-4ad3-8edf-b189453773b0',
+        defaults={
+            'first_name': 'Samson',
+            'last_name': 'Jabo',
+            'email': email,
+            'phone_number': '+2348000000001',
+            'smart_wallet_id': '3e64d0ba-30d1-4277-b72e-a2d2464b9c19',
+            'wallet_address': '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6',
+            'smart_account_address': '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6',
+            'pin_enrolled': True,
+            'face_enrolled': True,
+        }
+    )
+    profile.user = auth_user
+    profile.email = email
+    profile.pin_enrolled = True
+    profile.face_enrolled = True
+    profile.smart_wallet_id = '3e64d0ba-30d1-4277-b72e-a2d2464b9c19'
+    profile.wallet_address = '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6'
+    profile.smart_account_address = '0xe7b1e4c0d790B66360cf66Dd9fbC1e0E3B2dd5d6'
+    profile.set_pin('1234')
+    profile.save()
+
+    # Seed Samson's Nigerian transactions
+    if profile.transactions.count() == 0 or profile.transactions.filter(currency='USD', description__contains='Upwork').exists():
+        seed_samson_transactions(profile, force_reset=True)
+
+    # BusinessProfile
+    biz, _ = BusinessProfile.objects.get_or_create(
+        user=auth_user,
+        defaults={
+            'business_name': 'Samson Tech & Agro-Logistics',
+            'business_size': 'small',
+            'has_employees': True,
+            'avg_employee_pay': Decimal('85000.00'),
+            'spend_categories': ['inventory', 'utilities', 'transport', 'salaries'],
+            'avg_monthly_revenue_range': '2m_10m',
+            'description': 'Consumer electronics retail and cross-city agricultural logistics in Lagos and Abuja',
+            'onboarding_step_completed': True,
+        }
+    )
+    biz.business_name = 'Samson Tech & Agro-Logistics'
+    biz.business_size = 'small'
+    biz.has_employees = True
+    biz.onboarding_step_completed = True
+    biz.save()
+
+    # BusinessGoals
+    if not BusinessGoal.objects.filter(user=auth_user).exists():
+        BusinessGoal.objects.create(
+            user=auth_user,
+            goal_text='Expand warehouse inventory in Ikeja for solar backup hardware by Q4',
+        )
+        BusinessGoal.objects.create(
+            user=auth_user,
+            goal_text='Deploy fleet tracking & cold-chain equipment for 3 dispatch vans',
+        )
+
+    # Connected Accounts (Commercial Banks)
+    banks = [
+        {
+            'institution_name': 'Access Bank',
+            'account_name': 'Samson Jabo Logistics',
+            'account_number_masked': '069123****',
+            'mono_account_id': 'mono_acc_access_01',
+            'status': 'connected',
+        },
+        {
+            'institution_name': 'GTBank',
+            'account_name': 'Samson Jabo Commercial',
+            'account_number_masked': '014987****',
+            'mono_account_id': 'mono_acc_gtb_02',
+            'status': 'connected',
+        },
+        {
+            'institution_name': 'Zenith Bank',
+            'account_name': 'Samson Jabo Corporate Reserve',
+            'account_number_masked': '208345****',
+            'mono_account_id': 'mono_acc_zenith_03',
+            'status': 'connected',
+        },
+    ]
+    for b in banks:
+        ConnectedAccount.objects.update_or_create(
+            user=auth_user,
+            mono_account_id=b['mono_account_id'],
+            defaults={
+                'provider': 'mono',
+                'institution_name': b['institution_name'],
+                'account_name': b['account_name'],
+                'account_number_masked': b['account_number_masked'],
+                'status': 'connected',
+            }
+        )
+
+    # Loans
+    now = timezone.now().date()
+    loans = [
+        {
+            'lender_name': 'FairMoney SME Growth Facility',
+            'amount': Decimal('1500000.00'),
+            'interest_rate': Decimal('3.500'),
+            'date_taken': now - timedelta(days=45),
+            'due_date': now + timedelta(days=135),
+        },
+        {
+            'lender_name': 'Lapo Microfinance Inventory Expansion',
+            'amount': Decimal('650000.00'),
+            'interest_rate': Decimal('4.000'),
+            'date_taken': now - timedelta(days=20),
+            'due_date': now + timedelta(days=160),
+        },
+    ]
+    for l in loans:
+        Loan.objects.update_or_create(
+            user=auth_user,
+            lender_name=l['lender_name'],
+            defaults=l,
+        )
+
+    return auth_user
