@@ -81,85 +81,67 @@ class _NuruTextFieldState extends State<NuruTextField> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (widget.enabled && !_effectiveFocusNode.hasFocus) {
-          _effectiveFocusNode.requestFocus();
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: NuruTheme.textSecondary,
-              letterSpacing: 0.2,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: NuruTheme.textSecondary,
+            letterSpacing: 0.2,
           ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: widget.controller,
-            focusNode: _effectiveFocusNode,
-            obscureText: _obscured,
-            keyboardType: widget.keyboardType,
-            textInputAction: widget.textInputAction,
-            validator: widget.validator,
-            onChanged: widget.onChanged,
-            onFieldSubmitted: widget.onSubmitted,
-            enabled: widget.enabled,
-            autofocus: widget.autofocus,
-            maxLines: widget.obscureText ? 1 : widget.maxLines,
-            autofillHints: widget.autofillHints,
-            enableInteractiveSelection: true,
-            autocorrect: !widget.obscureText &&
-                widget.keyboardType != TextInputType.emailAddress,
-            enableSuggestions: !widget.obscureText,
-            textCapitalization: (widget.obscureText ||
-                    widget.keyboardType == TextInputType.emailAddress)
-                ? TextCapitalization.none
-                : TextCapitalization.sentences,
-            contextMenuBuilder: (context, editableTextState) {
-              // Strip liveTextInput on iOS Simulator to avoid keyboard input freezes
-              final items = editableTextState.contextMenuButtonItems;
-              items.removeWhere(
-                (item) => item.type == ContextMenuButtonType.liveTextInput,
-              );
-              return AdaptiveTextSelectionToolbar.buttonItems(
-                anchors: editableTextState.contextMenuAnchors,
-                buttonItems: items,
-              );
-            },
-            style: const TextStyle(
-              fontSize: 16,
-              color: NuruTheme.textPrimary,
-            ),
-            decoration: InputDecoration(
-              hintText: widget.hint,
-              errorText: widget.errorText,
-              prefixIcon: widget.prefixIcon == null
-                  ? null
-                  : Icon(widget.prefixIcon, size: 20, color: NuruTheme.textMuted),
-              suffixIcon: widget.obscureText
-                  ? IconButton(
-                      icon: Icon(
-                        _obscured
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                        size: 20,
-                        color: NuruTheme.textMuted,
-                      ),
-                      onPressed: () => setState(() => _obscured = !_obscured),
-                      tooltip: _obscured ? 'Show password' : 'Hide password',
-                    )
-                  : null,
-            ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: widget.controller,
+          focusNode: _effectiveFocusNode,
+          obscureText: _obscured,
+          keyboardType: widget.keyboardType,
+          textInputAction: widget.textInputAction,
+          validator: widget.validator,
+          onChanged: widget.onChanged,
+          onFieldSubmitted: widget.onSubmitted,
+          enabled: widget.enabled,
+          autofocus: widget.autofocus,
+          maxLines: widget.obscureText ? 1 : widget.maxLines,
+          autofillHints: widget.autofillHints,
+          enableInteractiveSelection: true,
+          autocorrect: !widget.obscureText &&
+              widget.keyboardType != TextInputType.emailAddress,
+          enableSuggestions: !widget.obscureText,
+          textCapitalization: (widget.obscureText ||
+                  widget.keyboardType == TextInputType.emailAddress)
+              ? TextCapitalization.none
+              : TextCapitalization.sentences,
+          style: const TextStyle(
+            fontSize: 16,
+            color: NuruTheme.textPrimary,
           ),
-        ],
-      ),
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            errorText: widget.errorText,
+            prefixIcon: widget.prefixIcon == null
+                ? null
+                : Icon(widget.prefixIcon, size: 20, color: NuruTheme.textMuted),
+            suffixIcon: widget.obscureText
+                ? IconButton(
+                    icon: Icon(
+                      _obscured
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                      size: 20,
+                      color: NuruTheme.textMuted,
+                    ),
+                    onPressed: () => setState(() => _obscured = !_obscured),
+                    tooltip: _obscured ? 'Show password' : 'Hide password',
+                  )
+                : null,
+          ),
+        ),
+      ],
     );
   }
+
 }

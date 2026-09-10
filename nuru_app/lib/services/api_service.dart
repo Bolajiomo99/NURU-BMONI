@@ -20,7 +20,7 @@ class ApiService {
   /// --dart-define=API_URL=http://localhost:8000/api at build/run time.
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://nuru-bmoni.up.railway.app/api',
+    defaultValue: 'https://nuru.up.railway.app/api',
   );
 
   static const String authTokenKey = 'nuru_auth_token';
@@ -115,7 +115,7 @@ class ApiService {
 
   static Future<http.Response> _get(
     String path, {
-    Duration timeout = const Duration(seconds: 20),
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     final base = await getBaseUrl();
     return http
@@ -126,7 +126,7 @@ class ApiService {
   static Future<http.Response> _post(
     String path,
     Map<String, dynamic> body, {
-    Duration timeout = const Duration(seconds: 25),
+    Duration timeout = const Duration(seconds: 12),
   }) async {
     final base = await getBaseUrl();
     return http

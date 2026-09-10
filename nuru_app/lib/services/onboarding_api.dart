@@ -44,7 +44,7 @@ class OnboardingApi {
     return headers;
   }
 
-  Uri _uri(String path) => Uri.parse('${ApiService.baseUrl}$path');
+  Future<Uri> _uri(String path) async => Uri.parse('${await ApiService.getBaseUrl()}$path');
 
   Map<String, dynamic> _decodeBody(http.Response res) {
     try {
@@ -90,9 +90,10 @@ class OnboardingApi {
   Future<Map<String, dynamic>> _get(String path) async {
     late final http.Response res;
     try {
+      final uri = await _uri(path);
       res = await _client
-          .get(_uri(path), headers: await _headers())
-          .timeout(const Duration(seconds: 15));
+          .get(uri, headers: await _headers())
+          .timeout(const Duration(seconds: 10));
     } catch (_) {
       throw const OnboardingException(
         message: 'Could not reach NURU. Check your connection and try again.',
@@ -109,13 +110,13 @@ class OnboardingApi {
   }) async {
     late final http.Response res;
     try {
-      final uri = _uri(path);
+      final uri = await _uri(path);
       final headers = await _headers();
       final encoded = body == null ? null : jsonEncode(body);
       res = await (method == 'PATCH'
               ? _client.patch(uri, headers: headers, body: encoded)
               : _client.post(uri, headers: headers, body: encoded))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 10));
     } catch (_) {
       throw const OnboardingException(
         message: 'Could not reach NURU. Check your connection and try again.',
@@ -128,9 +129,10 @@ class OnboardingApi {
   Future<void> _delete(String path) async {
     late final http.Response res;
     try {
+      final uri = await _uri(path);
       res = await _client
-          .delete(_uri(path), headers: await _headers())
-          .timeout(const Duration(seconds: 15));
+          .delete(uri, headers: await _headers())
+          .timeout(const Duration(seconds: 10));
     } catch (_) {
       throw const OnboardingException(
         message: 'Could not reach NURU. Check your connection and try again.',
@@ -148,8 +150,9 @@ class OnboardingApi {
   /// onboarded user back to the first form.
   Future<Map<String, dynamic>?> status() async {
     try {
+      final uri = await _uri('/onboarding/status/');
       final res = await _client
-          .get(_uri('/onboarding/status/'), headers: await _headers())
+          .get(uri, headers: await _headers())
           .timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) return _decodeBody(res);
     } catch (_) {

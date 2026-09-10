@@ -14,7 +14,7 @@ class AuthApi {
 
   AuthApi({http.Client? client}) : _client = client ?? http.Client();
 
-  Uri _uri(String path) => Uri.parse('${ApiService.baseUrl}$path');
+  Future<Uri> _uri(String path) async => Uri.parse('${await ApiService.getBaseUrl()}$path');
 
   static const Map<String, String> _jsonHeaders = {
     'Content-Type': 'application/json',
@@ -24,9 +24,10 @@ class AuthApi {
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
     late final http.Response res;
     try {
+      final uri = await _uri(path);
       res = await _client
-          .post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body))
-          .timeout(const Duration(seconds: 15));
+          .post(uri, headers: _jsonHeaders, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 10));
     } catch (_) {
       throw const AuthException(
         code: 'network_error',
@@ -138,10 +139,11 @@ class AuthApi {
     if (token == null || token.isEmpty) return null;
 
     try {
+      final uri = await _uri('/auth/me/');
       final res = await _client.get(
-        _uri('/auth/me/'),
+        uri,
         headers: {..._jsonHeaders, 'Authorization': 'Token $token'},
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
         return AuthSession.fromJson(

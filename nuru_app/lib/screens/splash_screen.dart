@@ -102,7 +102,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     try {
       await ref
           .read(startupProvider.future)
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 2));
     } catch (_) {
       // Slow or failed: fall through to the signed-out flow.
     }

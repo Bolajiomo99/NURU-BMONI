@@ -8,7 +8,6 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
-import dj_database_url
 from corsheaders.defaults import default_headers
 
 load_dotenv()
@@ -40,10 +39,10 @@ RESEND_FROM_EMAIL = os.getenv('RESEND_FROM_EMAIL', 'NURU <onboarding@resend.dev>
 # (test_sk_… vs live_sk_…), not by the base URL.
 MONO_SECRET_KEY = os.getenv('MONO_SECRET_KEY', '')
 MONO_BASE_URL = os.getenv('MONO_BASE_URL', 'https://api.withmono.com')
-MONO_REDIRECT_URL = os.getenv('MONO_REDIRECT_URL', 'https://nuru-bmoni.up.railway.app/mono/callback')
+MONO_REDIRECT_URL = os.getenv('MONO_REDIRECT_URL', 'https://nuru.up.railway.app/mono/callback')
 
 # Where the Flutter web build is served from, for links inside emails
-FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'https://nuru-bmoni.up.railway.app')
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'https://nuru.up.railway.app')
 
 # Fernet key for ConnectedAccount.mono_access_token. Falls back to a value
 # derived from SECRET_KEY so local dev and tests need no extra secret.
