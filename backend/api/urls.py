@@ -23,6 +23,12 @@ from .onboarding_views import (
     LoanListCreateView,
     OnboardingStatusView,
 )
+from .security_views import (
+    SecurityStatusView,
+    SetupTransactionPinView,
+    VerifyFaceView,
+    VerifyTransactionPinView,
+)
 from .views import (
     DashboardView,
     ChatView,
@@ -67,6 +73,12 @@ urlpatterns = [
     # Action endpoints
     path('action/transfer/', TransferActionView.as_view(), name='action-transfer'),
     path('action/swap/', SwapActionView.as_view(), name='action-swap'),
+
+    # Transaction PIN + face 2FA
+    path('security/status/', SecurityStatusView.as_view(), name='security-status'),
+    path('security/pin/setup/', SetupTransactionPinView.as_view(), name='security-pin-setup'),
+    path('security/pin/verify/', VerifyTransactionPinView.as_view(), name='security-pin-verify'),
+    path('security/face/verify/', VerifyFaceView.as_view(), name='security-face-verify'),
 
     # Admin / Demo
     path('seed/', SeedDataView.as_view(), name='seed'),

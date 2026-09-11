@@ -309,6 +309,33 @@ class ConnectedAccount(models.Model):
         return f"{self.institution_name or self.provider} ({self.status})"
 
 
+class TransactionSecurity(models.Model):
+    """Per-account transaction authorization state, gating transfers/swaps.
+
+    Only `pin_hash` is real verification — checked with Django's password
+    hashers, same as the account password. `last_face_check_at` is an audit
+    timestamp, not proof of a biometric match: the Flutter client has no
+    camera capture wired up yet and sends a fixed placeholder payload (see
+    transaction_auth_sheet.dart), so this endpoint records that a check was
+    requested rather than confirming identity. Wire up a real liveness/face
+    vendor before this satisfies an actual 2FA requirement.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='transaction_security',
+    )
+    pin_hash = models.CharField(max_length=128, blank=True, default='')
+    pin_set_at = models.DateTimeField(null=True, blank=True)
+    pin_failed_attempts = models.PositiveSmallIntegerField(default=0)
+    pin_locked_until = models.DateTimeField(null=True, blank=True)
+    last_face_check_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"TransactionSecurity({self.user})"
+
+
 class ChatMessage(models.Model):
     """Stores AI conversation history."""
     ROLE_CHOICES = [

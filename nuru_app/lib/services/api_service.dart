@@ -164,6 +164,45 @@ class ApiService {
     }
   }
 
+  /// Whether the signed-in account has a transaction PIN set
+  static Future<Map<String, dynamic>> getSecurityStatus() async {
+    final response = await _get('/security/status/');
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load security status');
+    }
+  }
+
+  /// Set (or replace) the 4-digit transaction PIN
+  static Future<void> setupTransactionPin(String pin) async {
+    final response = await _post('/security/pin/setup/', {'pin': pin});
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to set transaction PIN');
+    }
+  }
+
+  /// Verify the 4-digit transaction PIN before authorizing an action
+  static Future<void> verifyTransactionPin(String pin) async {
+    final response = await _post('/security/pin/verify/', {'pin': pin});
+
+    if (response.statusCode != 200) {
+      final json = jsonDecode(response.body);
+      throw Exception(json['message'] ?? 'Incorrect PIN');
+    }
+  }
+
+  /// Record the face-2FA check for the current transaction authorization
+  static Future<void> verifyFace(String imagePayload) async {
+    final response = await _post('/security/face/verify/', {'image': imagePayload});
+
+    if (response.statusCode != 200) {
+      throw Exception('Face verification failed');
+    }
+  }
+
   /// Reset session context back to unauthenticated guest mode
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();

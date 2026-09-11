@@ -48,6 +48,19 @@ class SwapActionSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=15, decimal_places=2)
 
 
+class TransactionPinSerializer(serializers.Serializer):
+    pin = serializers.CharField(min_length=4, max_length=4)
+
+    def validate_pin(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError('PIN must be 4 digits.')
+        return value
+
+
+class FaceVerifySerializer(serializers.Serializer):
+    image = serializers.CharField(allow_blank=False, trim_whitespace=False)
+
+
 class ConnectedAccountSerializer(serializers.ModelSerializer):
     """Never exposes mono_access_token — the credential stays server-side."""
 
